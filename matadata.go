@@ -18,7 +18,6 @@ type RequestType int
 const (
 	RequestTypeHttp RequestType = iota
 	RequestTypeGrpc
-	RequestTypeGrpcWeb
 )
 
 type Metadata struct {
