@@ -16,7 +16,7 @@ require (
 )
 
 require (
-	github.com/hopeio/gox v1.11.5
+	github.com/hopeio/gox v1.11.7
 	github.com/quic-go/quic-go v0.57.0
 	github.com/rs/cors v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.63.0
@@ -70,7 +70,7 @@ require (
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect

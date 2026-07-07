@@ -75,6 +75,7 @@ func (s *Server) Run() {
 		s.meter = otel.Meter(ScopeName)
 	}
 
+	onePort := s.Grpc.Addr == "" || s.Grpc.Addr == s.Addr
 	handler := httpx.UseMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		md := Metadata{
 			Request:        r,
@@ -82,8 +83,7 @@ func (s *Server) Run() {
 			RequestAt:      time.Now(),
 		}
 		r = r.WithContext(WithMetadata(r.Context(), &md))
-		contentType := r.Header.Get(httpx.HeaderContentType)
-		if strings.HasPrefix(contentType, httpx.ContentTypeGrpc) {
+		if onePort && strings.HasPrefix(r.Header.Get(httpx.HeaderContentType), httpx.ContentTypeGrpc) {
 			 if r.ProtoMajor == 2 && grpcServer != nil {
 				md.RequestType = RequestTypeGrpc
 				grpcServer.ServeHTTP(w, r)
@@ -96,7 +96,7 @@ func (s *Server) Run() {
 	}), s.Middlewares...)
 
 	s.Server.Handler = handler
-
+	
 	if s.Server.BaseContext == nil {
 		s.Server.BaseContext = func(_ net.Listener) context.Context {
 			return sigCtx
@@ -109,7 +109,21 @@ func (s *Server) Run() {
 		s.Server.Protocols.SetHTTP1(true)
 		s.Server.Protocols.SetUnencryptedHTTP2(true)
 	}
+
 	srvErr := make(chan error, 1)
+
+	if s.Grpc.Addr != "" && s.Grpc.Addr != s.Addr {
+		go func() {
+			log.Infof("grpc listening: %s", s.Grpc.Addr)
+			listener, err := net.Listen("tcp", s.Grpc.Addr)
+			if err != nil {
+				srvErr <- err
+				return
+			}
+			srvErr <- grpcServer.Serve(listener)
+		}()
+	}
+
 	if s.HTTP3.Enabled {
 		s.HTTP3.Handler = handler
 		if s.HTTP3.ConnContext == nil {

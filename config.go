@@ -39,22 +39,22 @@ type AccessLogConfig struct {
 
 type Server struct {
 	http.Server
-	CertFile          string
-	KeyFile           string
-	AccessLog         AccessLogConfig
-	HTTP3             Http3Config
-	Cors              CorsConfig
-	Grpc              GrpcConfig
-	InternalServer    http.Server
-	Openapi           OpenapiConfig
-	Otel              OtelConfig
-	tracer            trace.Tracer
-	meter             metric.Meter
-	DebugHandler      DebugHandlerConfig
-	BaseContext       context.Context
-	Middlewares       []httpx.Middleware
-	HttpHandler       http.Handler
-	GrpcHandler       func(*grpc.Server)
+	CertFile       string
+	KeyFile        string
+	AccessLog      AccessLogConfig
+	HTTP3          Http3Config
+	Cors           CorsConfig
+	Grpc           GrpcConfig
+	InternalServer http.Server
+	Openapi        OpenapiConfig
+	Otel           OtelConfig
+	tracer         trace.Tracer
+	meter          metric.Meter
+	DebugHandler   DebugHandlerConfig
+	BaseContext    context.Context
+	Middlewares    []httpx.Middleware
+	HttpHandler    http.Handler
+	GrpcHandler    func(*grpc.Server)
 }
 
 type DebugHandlerConfig struct {
@@ -68,6 +68,7 @@ type OpenapiConfig struct {
 }
 
 type GrpcConfig struct {
+	Addr                     string
 	RecordFunc               GrpcAccessLog
 	Options                  []grpc.ServerOption
 	UnaryServerInterceptors  []grpc.UnaryServerInterceptor
