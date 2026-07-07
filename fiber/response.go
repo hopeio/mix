@@ -7,7 +7,6 @@ import (
 	httpx "github.com/hopeio/gox/net/http"
 	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -38,13 +37,9 @@ var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 }
 
 var HttpError = func(ctx fiber.Ctx, err error) {
-	s, ok := status.FromError(err)
-	if !ok {
-		grpclog.Warningf("Failed to convert error to status: %v", err)
-	}
-	errcodeHeader := strconv.Itoa(int(s.Code()))
-	message := s.Proto()
-	buf, contentType, _ := gatewayx.DefaultMarshal(ctx.Context(), message)
+	s := gatewayx.ErrRespFromError(err)
+	errcodeHeader := strconv.Itoa(int(s.Code))
+	buf, contentType, _ := gatewayx.DefaultMarshal(ctx.Context(), s)
 	ctx.Set(httpx.HeaderContentType, contentType)
 	ctx.Set(httpx.HeaderGrpcStatus, errcodeHeader)
 	ctx.Set(httpx.HeaderErrorCode, errcodeHeader)

@@ -4,8 +4,8 @@ import (
 	"io"
 
 	"github.com/gofiber/fiber/v3"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
+	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -45,7 +45,7 @@ func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error
 	if err != nil {
 		return err
 	}
-	return gatewayx.Unmarshaller(s.ctx.Context(), s.contentType, data, pm)
+	return gatewayx.DefaultUnmarshal(s.ctx.Context(), s.contentType, data, pm)
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SendMsg(m any) error {

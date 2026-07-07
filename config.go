@@ -115,10 +115,6 @@ func (s *Server) Init() {
 		s.Grpc.RecordFunc = DefaultGrpcAccessLog
 	}
 
-	if s.HttpHandler == nil {
-		log.Fatal("HttpHandler is required")
-	}
-
 	if s.InternalServer.Addr == "" {
 		s.InternalServer.Addr = ":8081"
 	}
