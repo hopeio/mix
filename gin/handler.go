@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hopeio/gox/errors"
-	httpx "github.com/hopeio/gox/net/http"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	mix_http "github.com/hopeio/mix/http"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 	"github.com/hopeio/gox/types"
 )
 
@@ -105,7 +105,7 @@ func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx
 
 
 
-type Service[REQ, RESP any] func(*gin.Context, REQ) (RESP, *httpx.ErrResp)
+type Service[REQ, RESP any] func(*gin.Context, REQ) (RESP, *mix_http.ErrResp)
 
 func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
@@ -113,13 +113,13 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) gin.HandlerFunc {
 		err := Bind(ctx, req)
 		if err != nil {
 			ctx.Status(http.StatusBadRequest)
-			httpx.ServeError(ctx.Writer, ctx.Request, errors.InvalidArgument.Wrap(err))
+			mix_http.ServeError(ctx.Writer, ctx.Request, errors.InvalidArgument.Wrap(err))
 			ctx.Abort()
 			return
 		}
 		res, reserr := service(ctx, req)
 		if reserr != nil {
-			httpx.ServeError(ctx.Writer, ctx.Request, reserr)
+			mix_http.ServeError(ctx.Writer, ctx.Request, reserr)
 			ctx.Abort()
 			return
 		}
@@ -127,11 +127,11 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) gin.HandlerFunc {
 			httpres.ServeHTTP(ctx.Writer, ctx.Request)
 			return
 		}
-		if httpres, ok := any(res).(httpx.Responder); ok {
+		if httpres, ok := any(res).(mix_http.Responder); ok {
 			httpres.Respond(ctx, ctx.Writer)
 			return
 		}
-		httpx.ServeSuccess(ctx.Writer, ctx.Request, res)
+		mix_http.ServeSuccess(ctx.Writer, ctx.Request, res)
 	}
 }
 
@@ -141,13 +141,13 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) gin.Ha
 		err := Bind(ctx, req)
 		if err != nil {
 			ctx.Status(http.StatusBadRequest)
-			httpx.ServeError(ctx.Writer, ctx.Request, errors.InvalidArgument.Wrap(err))
+			mix_http.ServeError(ctx.Writer, ctx.Request, errors.InvalidArgument.Wrap(err))
 			ctx.Abort()
 			return
 		}
-		res, err := service(httpx.WrapContext(ctx), req)
+		res, err := service(mix_http.WrapContext(ctx), req)
 		if err != nil {
-			httpx.ServeError(ctx.Writer, ctx.Request, err)
+			mix_http.ServeError(ctx.Writer, ctx.Request, err)
 			ctx.Abort()
 			return
 		}
@@ -155,10 +155,10 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) gin.Ha
 			httpres.ServeHTTP(ctx.Writer, ctx.Request)
 			return
 		}
-		if httpres, ok := any(res).(httpx.Responder); ok {
+		if httpres, ok := any(res).(mix_http.Responder); ok {
 			httpres.Respond(ctx, ctx.Writer)
 			return
 		}
-		httpx.ServeSuccess(ctx.Writer, ctx.Request, res)
+		mix_http.ServeSuccess(ctx.Writer, ctx.Request, res)
 	}
 }

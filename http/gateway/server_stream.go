@@ -1,27 +1,32 @@
-package gin
+package gateway
 
 import (
 	"io"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+var _ grpc.ServerStream = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
+var _ grpcx.ClientSideStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty] = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
+var _ grpcx.ServerSideStream[emptypb.Empty, *emptypb.Empty] = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
 
 // ServerStream 服务端 handler 持有的 gRPC stream（grpc.ServerStream 语义）。
 // 通过 noRecv / unaryResponse 区分 server streaming、client streaming、bidi。
 type ServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]] struct {
-	ginStreamBase
+	streamBase
 	closed        bool
 	noRecv        bool
 	unaryResponse bool
 }
 
-func NewServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](ctx *gin.Context) *ServerStream[Req, Resp, ReqPtr, RespPtr] {
-	return &ServerStream[Req, Resp, ReqPtr, RespPtr]{ginStreamBase: newGinStreamBase(ctx)}
+func NewServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerStream[Req, Resp, ReqPtr, RespPtr] {
+	return &ServerStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) forServerSendOnly() {
@@ -64,7 +69,7 @@ func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	return gatewayx.DefaultUnmarshal(s.ctx.Request.Context(), s.contentType, data, pm)
+	return DefaultUnmarshal(s.r.Context(), s.contentType, data, pm)
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) SendAndClose(msg RespPtr) error {

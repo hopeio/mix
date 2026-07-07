@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 	httpx "github.com/hopeio/gox/net/http"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

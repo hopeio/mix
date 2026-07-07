@@ -5,7 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"

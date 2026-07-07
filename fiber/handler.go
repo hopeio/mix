@@ -6,9 +6,9 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/hopeio/gox/errors"
-	httpx "github.com/hopeio/gox/net/http"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	gatewayx "github.com/hopeio/mix/http/gateway"
+	mix_http "github.com/hopeio/mix/http"
 	"github.com/hopeio/gox/types"
 )
 
@@ -107,7 +107,7 @@ func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx
 }
 
 
-type Service[REQ, RESP any] func(fiber.Ctx, REQ) (RESP, *httpx.ErrResp)
+type Service[REQ, RESP any] func(fiber.Ctx, REQ) (RESP, *mix_http.ErrResp)
 
 func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) fiber.Handler {
 	return func(ctx fiber.Ctx) error {
@@ -115,16 +115,16 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) fiber.Handler {
 		err := Bind(ctx, req)
 		if err != nil {
 			httpReq, _ := http.NewRequestWithContext(ctx.Context(), ctx.Method(), ctx.OriginalURL(), nil)
-			httpx.ServeError(NewResponseWriter(ctx), httpReq, errors.InvalidArgument.Msg(err.Error()))
+			mix_http.ServeError(NewResponseWriter(ctx), httpReq, errors.InvalidArgument.Msg(err.Error()))
 			return nil
 		}
 
 		res, reserr := service(ctx, req)
 		if reserr != nil {
-			httpx.RespondError(ctx, NewResponseWriter(ctx), reserr)
+			mix_http.RespondError(ctx, NewResponseWriter(ctx), reserr)
 			return nil
 		}
-		if httpres, ok := any(res).(httpx.Responder); ok {
+		if httpres, ok := any(res).(mix_http.Responder); ok {
 			httpres.Respond(ctx, NewResponseWriter(ctx))
 			return nil
 		}
@@ -140,17 +140,17 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) fiber.
 		err := Bind(ctx, req)
 		if err != nil {
 			httpReq, _ := http.NewRequestWithContext(ctx.Context(), ctx.Method(), ctx.OriginalURL(), nil)
-			httpx.ServeError(NewResponseWriter(ctx), httpReq, errors.InvalidArgument.Msg(err.Error()))
+			mix_http.ServeError(NewResponseWriter(ctx), httpReq, errors.InvalidArgument.Msg(err.Error()))
 			return nil
 		}
 
 		res, reserr := service(ctx.Context(), req)
 		if reserr != nil {
 			httpReq, _ := http.NewRequestWithContext(ctx.Context(), ctx.Method(), ctx.OriginalURL(), nil)
-			httpx.ServeError(NewResponseWriter(ctx), httpReq, reserr)
+			mix_http.ServeError(NewResponseWriter(ctx), httpReq, reserr)
 			return nil
 		}
-		if httpres, ok := any(res).(httpx.Responder); ok {
+		if httpres, ok := any(res).(mix_http.Responder); ok {
 			httpres.Respond(ctx, NewResponseWriter(ctx))
 			return nil
 		}
@@ -161,8 +161,8 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) fiber.
 
 func Respond(ctx fiber.Ctx, v any) {
 	if err, ok := v.(error); ok {
-		httpx.RespondError(ctx, NewResponseWriter(ctx), err)
+		mix_http.RespondError(ctx, NewResponseWriter(ctx), err)
 		return
 	}
-	httpx.RespondSuccess(ctx, NewResponseWriter(ctx), v)
+	mix_http.RespondSuccess(ctx, NewResponseWriter(ctx), v)
 }

@@ -5,8 +5,9 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	mix_http "github.com/hopeio/mix/http"
 	httpx "github.com/hopeio/gox/net/http"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -32,4 +33,12 @@ var HttpError = func(ctx *gin.Context, err error) {
 		recorder.RecordBody(buf, s)
 	}
 	ctx.Writer.Write(buf)
+}
+
+func Respond(ctx *gin.Context, v any) {
+	if err, ok := v.(error); ok {
+		mix_http.ServeError(ctx.Writer, ctx.Request, err)
+		return
+	}
+	mix_http.ServeSuccess(ctx.Writer, ctx.Request, v)
 }

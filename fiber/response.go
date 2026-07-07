@@ -5,7 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	httpx "github.com/hopeio/gox/net/http"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	mix_http "github.com/hopeio/mix/http"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/protobuf/proto"
 )
@@ -15,12 +16,12 @@ var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 	var buf []byte
 	var err error
 	switch rb := message.(type) {
-	case httpx.Responder:
+	case mix_http.Responder:
 		rb.Respond(ctx, NewResponseWriter(ctx))
 		return nil
-	case httpx.ResponseBody:
+	case mix_http.ResponseBody:
 		buf, contentType = rb.ResponseBody()
-	case httpx.XXXResponseBody:
+	case mix_http.XXXResponseBody:
 		buf, contentType, err = gatewayx.DefaultMarshal(ctx, rb.XXX_ResponseBody())
 		if err != nil {
 			return err

@@ -16,10 +16,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hopeio/gox/kvstruct"
 	httpx "github.com/hopeio/gox/net/http"
+	mix_http "github.com/hopeio/mix/http"
 )
 
 func Bind(ctx *gin.Context, obj any) error {
-	return httpx.CommonBind(RequestSource{ctx}, obj)
+	return mix_http.CommonBind(RequestSource{ctx}, obj)
 }
 
 type RequestSource struct {
@@ -35,7 +36,7 @@ func (s RequestSource) Query() kvstruct.ValuesGetter {
 }
 
 func (s RequestSource) Header() kvstruct.ValuesGetter {
-	return (httpx.HeaderSource)(s.Request.Header)
+	return (mix_http.HeaderSource)(s.Request.Header)
 }
 
 func (s RequestSource) Body() (context.Context, string, io.ReadCloser) {

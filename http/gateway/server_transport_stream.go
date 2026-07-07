@@ -1,24 +1,23 @@
-package gin
+package gateway
 
 import (
 	"io"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/mix/http/gateway"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-// ServerTransportStream 双向 streaming；Unary 路径也用它承载 metadata（grpc.SetHeader 等）。
+// ServerTransportStream 双向 streaming；Unary 路径也用它承载 metadata。
 type ServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]] struct {
-	ginStreamBase
+	streamBase
 	closed bool
 }
 
-func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](ctx *gin.Context) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
-	return &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{ginStreamBase: newGinStreamBase(ctx)}
+func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
+	return &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SetTrailer(md metadata.MD) {
@@ -50,7 +49,7 @@ func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error
 	if err != nil {
 		return err
 	}
-	return gatewayx.DefaultUnmarshal(s.ctx.Request.Context(), s.contentType, data, pm)
+	return DefaultUnmarshal(s.r.Context(), s.contentType, data, pm)
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SendMsg(m any) error {

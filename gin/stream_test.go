@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	jsonx "github.com/hopeio/gox/encoding/json"
-	httpx "github.com/hopeio/gox/net/http"
+	mix_http "github.com/hopeio/mix/http"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -19,7 +19,7 @@ import (
 
 func encodeFrame(t *testing.T, msg any) []byte {
 	t.Helper()
-	data, err := jsonx.Marshal(&httpx.CommonAnyResp{Data: msg})
+	data, err := jsonx.Marshal(&mix_http.CommonAnyResp{Data: msg})
 	if err != nil {
 		t.Fatal(err)
 	}

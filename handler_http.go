@@ -14,7 +14,8 @@ import (
 	"github.com/hopeio/gox/errors"
 	"github.com/hopeio/gox/log"
 	httpx "github.com/hopeio/gox/net/http"
-	gatewayx "github.com/hopeio/gox/net/http/grpc/gateway"
+	mix_http "github.com/hopeio/mix/http"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 	"github.com/hopeio/gox/net/http/openapi"
 	stringsx "github.com/hopeio/gox/strings"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -40,7 +41,7 @@ func (s *Server) httpHandler() http.Handler {
 				log.StackLogger().Errorw(fmt.Sprintf("panic: %v", err))
 				code := strconv.Itoa(int(errors.Internal))
 				w.Header().Set(httpx.HeaderErrorCode, code)
-				se := &httpx.ErrResp{Code: errors.Internal, Msg: sysErrMsg}
+				se := &mix_http.ErrResp{Code: errors.Internal, Msg: sysErrMsg}
 				buf, contentType, _ := gatewayx.DefaultMarshal(r.Context(), se)
 				w.Header().Set(httpx.HeaderContentType, contentType)
 				w.Write(buf)
