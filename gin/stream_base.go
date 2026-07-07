@@ -77,7 +77,10 @@ func (b *ginStreamBase) finalize(err error) {
 }
 
 func (b *ginStreamBase) sendFrame(msg proto.Message) error {
-	data, contentType := gatewayx.DefaultMarshal(b.ctx.Request.Context(), msg)
+	data, contentType, err := gatewayx.DefaultMarshal(b.ctx.Request.Context(), msg)
+	if err != nil {
+		return err
+	}
 	if !b.started {
 		b.started = true
 		gatewayx.BeginGRPCStream(b.ctx.Writer, b.trailers)

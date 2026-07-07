@@ -41,7 +41,7 @@ func (s *Server) httpHandler() http.Handler {
 				code := strconv.Itoa(int(errors.Internal))
 				w.Header().Set(httpx.HeaderErrorCode, code)
 				se := &httpx.ErrResp{Code: errors.Internal, Msg: sysErrMsg}
-				buf, contentType := gatewayx.DefaultMarshal(r.Context(), se)
+				buf, contentType, _ := gatewayx.DefaultMarshal(r.Context(), se)
 				w.Header().Set(httpx.HeaderContentType, contentType)
 				w.Write(buf)
 			}

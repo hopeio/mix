@@ -40,7 +40,11 @@ func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.Prot
 			return nil
 		}
 
-		HandleResponseMessage(ctx, resp)
+		err = HandleResponseMessage(ctx, resp)
+		if err != nil {
+			HttpError(ctx, err)
+			return err
+		}
 		return nil
 	}
 }

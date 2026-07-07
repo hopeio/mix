@@ -14,6 +14,7 @@ import (
 var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 	var contentType string
 	var buf []byte
+	var err error
 	switch rb := message.(type) {
 	case httpx.Responder:
 		rb.Respond(ctx, NewResponseWriter(ctx))
@@ -21,16 +22,20 @@ var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 	case httpx.ResponseBody:
 		buf, contentType = rb.ResponseBody()
 	case httpx.XXXResponseBody:
-		buf, contentType = gatewayx.DefaultMarshal(ctx, rb.XXX_ResponseBody())
+		buf, contentType, err = gatewayx.DefaultMarshal(ctx, rb.XXX_ResponseBody())
+		if err != nil {
+			return err
+		}
 	default:
-		buf, contentType = gatewayx.DefaultMarshal(ctx, message)
+		buf, contentType, err = gatewayx.DefaultMarshal(ctx, message)
+		if err != nil {
+			return err
+		}
 	}
 	ctx.Response().Header.Set(httpx.HeaderContentType, contentType)
-	_, err := ctx.Write(buf)
+	_, err = ctx.Write(buf)
 	return err
 }
-
-
 
 var HttpError = func(ctx fiber.Ctx, err error) {
 	s, ok := status.FromError(err)
@@ -38,7 +43,8 @@ var HttpError = func(ctx fiber.Ctx, err error) {
 		grpclog.Warningf("Failed to convert error to status: %v", err)
 	}
 	errcodeHeader := strconv.Itoa(int(s.Code()))
-	buf, contentType := gatewayx.DefaultMarshal(ctx.Context(), s)
+	message := s.Proto()
+	buf, contentType, _ := gatewayx.DefaultMarshal(ctx.Context(), message)
 	ctx.Set(httpx.HeaderContentType, contentType)
 	ctx.Set(httpx.HeaderGrpcStatus, errcodeHeader)
 	ctx.Set(httpx.HeaderErrorCode, errcodeHeader)
