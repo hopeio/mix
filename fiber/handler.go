@@ -7,9 +7,9 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/hopeio/gox/errors"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/mix/http/gateway"
-	mix_http "github.com/hopeio/mix/http"
 	"github.com/hopeio/gox/types"
+	mix_http "github.com/hopeio/mix/http"
+	gatewayx "github.com/hopeio/mix/http/gateway"
 )
 
 func withMetadataContext(ctx fiber.Ctx, stream interface {

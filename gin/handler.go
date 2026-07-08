@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hopeio/gox/errors"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
+	"github.com/hopeio/gox/types"
 	mix_http "github.com/hopeio/mix/http"
 	gatewayx "github.com/hopeio/mix/http/gateway"
-	"github.com/hopeio/gox/types"
 )
 
 
