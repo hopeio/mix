@@ -1,7 +1,6 @@
 package gin
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,17 +8,8 @@ import (
 	grpcx "github.com/hopeio/gox/net/http/grpc"
 	"github.com/hopeio/gox/types"
 	mix_http "github.com/hopeio/mix/http"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"google.golang.org/grpc"
 )
-
-
-func withMetadataContext(ctx *gin.Context, stream interface {
-	bindContext(context.Context)
-}) context.Context {
-	c := gatewayx.NewMetadataContext(ctx.Request.Context(), ctx.Request.Header)
-	stream.bindContext(c)
-	return c
-}
 
 func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](
 	handler grpcx.GrpcHandler[Req, Resp, ReqPtr, RespPtr],
@@ -31,11 +21,8 @@ func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.Prot
 			HttpError(ctx, err)
 			return
 		}
-
 		stream := NewServerTransportStream[Req, Resp, ReqPtr, RespPtr](ctx)
-		ctx.Request = ctx.Request.WithContext(withMetadataContext(ctx, stream))
-
-		resp, err := handler(ctx.Request.Context(), &req)
+		resp, err := handler(grpc.NewContextWithServerTransportStream(stream.Context(), stream), &req)
 		if err != nil {
 			HttpError(ctx, err)
 			return
@@ -63,7 +50,6 @@ func ServerSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](ctx)
 		stream.forServerSendOnly()
-		ctx.Request = ctx.Request.WithContext(withMetadataContext(ctx, stream))
 		defer func() { stream.FinalizeTrailers(err) }()
 		if err = handler(&req, any(stream).(S)); err != nil {
 			HttpError(ctx, err)
@@ -78,7 +64,6 @@ func ClientSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 	return func(ctx *gin.Context) {
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](ctx)
 		stream.forClientRecv()
-		ctx.Request = ctx.Request.WithContext(withMetadataContext(ctx, stream))
 
 		if err := handler(any(stream).(S)); err != nil {
 			HttpError(ctx, err)
@@ -94,7 +79,6 @@ func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx
 		var err error
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](ctx)
-		ctx.Request = ctx.Request.WithContext(withMetadataContext(ctx, stream))
 		defer func() { stream.FinalizeTrailers(err) }()
 		if err = handler(any(stream).(S)); err != nil {
 			HttpError(ctx, err)
@@ -102,8 +86,6 @@ func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx
 		}
 	}
 }
-
-
 
 type Service[REQ, RESP any] func(*gin.Context, REQ) (RESP, *mix_http.ErrResp)
 

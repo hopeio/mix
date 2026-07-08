@@ -18,6 +18,7 @@ import (
 
 type ginStreamBase struct {
 	ctx         *gin.Context
+	metaCtx     context.Context
 	method      string
 	trailers    metadata.MD
 	started     bool
@@ -27,11 +28,14 @@ type ginStreamBase struct {
 func newGinStreamBase(ctx *gin.Context) ginStreamBase {
 	return ginStreamBase{
 		ctx:         ctx,
+		metaCtx:     gatewayx.NewMetadataContext(ctx, ctx.Request.Header),
 		contentType: ctx.ContentType(),
 	}
 }
 
-func (b *ginStreamBase) Context() context.Context { return b.ctx.Request.Context() }
+func (b *ginStreamBase) Context() context.Context {
+	return b.metaCtx
+ }
 
 func (b *ginStreamBase) Method() string { return b.method }
 
@@ -64,10 +68,6 @@ func (b *ginStreamBase) setTrailer(md metadata.MD) {
 	}
 }
 
-func (b *ginStreamBase) bindContext(ctx context.Context) {
-	b.ctx.Request = b.ctx.Request.WithContext(ctx)
-}
-
 func (b *ginStreamBase) FinalizeTrailers(err error) {
 	b.finalize(err)
 }
@@ -77,7 +77,7 @@ func (b *ginStreamBase) finalize(err error) {
 }
 
 func (b *ginStreamBase) sendFrame(msg proto.Message) error {
-	data, contentType, err := gatewayx.DefaultMarshal(b.ctx.Request.Context(), msg)
+	data, contentType, err := gatewayx.DefaultMarshal(b.metaCtx, msg)
 	if err != nil {
 		return err
 	}

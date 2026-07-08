@@ -4,22 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	httpx "github.com/hopeio/mix/http"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
+	httpx "github.com/hopeio/mix/http"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
-
-type streamContextBinder interface {
-	bindContext(context.Context)
-}
-
-func bindMetadataContext(
-	r *http.Request, stream streamContextBinder,
-) context.Context {
-	ctx := NewMetadataContext(r.Context(), r.Header)
-	stream.bindContext(ctx)
-	return ctx
-}
 
 func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](gprcHanlder grpcx.GrpcHandler[Req, Resp, ReqPtr, RespPtr]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,9 +20,7 @@ func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.Prot
 		}
 
 		stream := NewServerTransportStream[Req, Resp, ReqPtr, RespPtr](w, r)
-		ctx := bindMetadataContext(r, stream)
-
-		resp, err := gprcHanlder(ctx, &req)
+		resp, err := gprcHanlder(grpc.NewContextWithServerTransportStream(stream.Context(), stream), &req)
 		if err != nil {
 			HandleError(w, r, err)
 			return
@@ -59,7 +46,6 @@ func ServerSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](w, r)
 		stream.forServerSendOnly()
-		r = r.WithContext(bindMetadataContext(r, stream))
 
 		defer FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
 		if err = gprcHanlder(&req, any(stream).(S)); err != nil {
@@ -73,7 +59,6 @@ func ClientSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](w, r)
 		stream.forClientRecv()
-		r = r.WithContext(bindMetadataContext(r, stream))
 
 		if err := gprcHanlder(any(stream).(S)); err != nil {
 			HandleError(w, r, err)
@@ -87,7 +72,6 @@ func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx
 		var err error
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](w, r)
-		r = r.WithContext(bindMetadataContext(r, stream))
 		defer FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
 		if err = gprcHanlder(any(stream).(S)); err != nil {
 			HandleError(w, r, err)

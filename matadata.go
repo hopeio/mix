@@ -33,8 +33,8 @@ type Metadata struct {
 	Request               *http.Request
 	ResponseWriter        http.ResponseWriter
 	RequestAt             time.Time
-	GrpcMD                metadata.MD                // grpc only
-	ServerTransportStream grpc.ServerTransportStream // grpc only
+	IncomingMD            metadata.MD
+	ServerTransportStream grpc.ServerTransportStream
 	AccessLogFields       []zap.Field
 	Bagage                baggage.Baggage // can not edit
 }

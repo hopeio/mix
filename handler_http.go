@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/metadata"
 )
 
 func (s *Server) InternalHandler() {
@@ -55,10 +56,11 @@ func (s *Server) httpHandler() http.Handler {
 				return
 			}
 		}
-		metadata := GetMetadata(r.Context())
-		metadata.TraceId = trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-		metadata.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, metadata.TraceId))
-		metadata.Bagage = baggage.FromContext(r.Context())
+		md := GetMetadata(r.Context())
+		md.TraceId = trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+		md.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, md.TraceId))
+		md.Bagage = baggage.FromContext(r.Context())
+		md.IncomingMD = metadata.MD(r.Header)
 		recorder := httpx.NewRecorder(w, r)
 		r.Body = &recorder.RequestRecorder
 		s.HttpHandler.ServeHTTP(&recorder.ResponseRecorder, r)
@@ -69,7 +71,7 @@ func (s *Server) httpHandler() http.Handler {
 			s.AccessLog.RecordFunc(r.Context(), &AccessLogParam{
 				r.Method, r.RequestURI,
 				recorder,
-				metadata,
+				md,
 			})
 		}
 		recorder.Reset()

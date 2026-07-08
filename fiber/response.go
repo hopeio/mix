@@ -40,7 +40,7 @@ var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 var HttpError = func(ctx fiber.Ctx, err error) {
 	s := gatewayx.ErrRespFromError(err)
 	errcodeHeader := strconv.Itoa(int(s.Code))
-	buf, contentType, _ := gatewayx.DefaultMarshal(ctx.Context(), s)
+	buf, contentType, _ := gatewayx.DefaultMarshal(ctx.RequestCtx(), s)
 	ctx.Set(httpx.HeaderContentType, contentType)
 	ctx.Set(httpx.HeaderGrpcStatus, errcodeHeader)
 	ctx.Set(httpx.HeaderErrorCode, errcodeHeader)

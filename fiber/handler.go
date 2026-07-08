@@ -1,7 +1,6 @@
 package fiber
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gofiber/fiber/v3"
@@ -9,16 +8,9 @@ import (
 	grpcx "github.com/hopeio/gox/net/http/grpc"
 	"github.com/hopeio/gox/types"
 	mix_http "github.com/hopeio/mix/http"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"google.golang.org/grpc"
 )
 
-func withMetadataContext(ctx fiber.Ctx, stream interface {
-	bindContext(context.Context)
-}) context.Context {
-	c := gatewayx.NewMetadataContext(ctx.Context(), fiberReqHeader(ctx))
-	stream.bindContext(c)
-	return c
-}
 
 func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](
 	handler grpcx.GrpcHandler[Req, Resp, ReqPtr, RespPtr],
@@ -32,9 +24,8 @@ func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.Prot
 		}
 
 		stream := NewServerTransportStream[Req, Resp, ReqPtr, RespPtr](ctx)
-		ctx.SetContext(withMetadataContext(ctx, stream))
 
-		resp, err := handler(ctx.Context(), &req)
+		resp, err := handler(grpc.NewContextWithServerTransportStream(stream.Context(), stream), &req)
 		if err != nil {
 			HttpError(ctx, err)
 			return nil
@@ -63,7 +54,6 @@ func ServerSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](ctx)
 		stream.forServerSendOnly()
-		ctx.SetContext(withMetadataContext(ctx, stream))
 		defer func() { stream.FinalizeTrailers(err) }()
 		if err = handler(&req, any(stream).(S)); err != nil {
 			HttpError(ctx, err)
@@ -79,7 +69,6 @@ func ClientSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 	return func(ctx fiber.Ctx) error {
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](ctx)
 		stream.forClientRecv()
-		ctx.SetContext(withMetadataContext(ctx, stream))
 
 		if err := handler(any(stream).(S)); err != nil {
 			HttpError(ctx, err)
@@ -96,7 +85,6 @@ func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx
 		var err error
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](ctx)
-		ctx.SetContext(withMetadataContext(ctx, stream))
 		defer func() { stream.FinalizeTrailers(err) }()
 		if err = handler(any(stream).(S)); err != nil {
 			HttpError(ctx, err)
@@ -114,7 +102,7 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) fiber.Handler {
 		req := new(REQ)
 		err := Bind(ctx, req)
 		if err != nil {
-			httpReq, _ := http.NewRequestWithContext(ctx.Context(), ctx.Method(), ctx.OriginalURL(), nil)
+			httpReq, _ := http.NewRequestWithContext(ctx.RequestCtx(), ctx.Method(), ctx.OriginalURL(), nil)
 			mix_http.ServeError(NewResponseWriter(ctx), httpReq, errors.InvalidArgument.Msg(err.Error()))
 			return nil
 		}
@@ -139,14 +127,14 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) fiber.
 		req := new(REQ)
 		err := Bind(ctx, req)
 		if err != nil {
-			httpReq, _ := http.NewRequestWithContext(ctx.Context(), ctx.Method(), ctx.OriginalURL(), nil)
+			httpReq, _ := http.NewRequestWithContext(ctx.RequestCtx(), ctx.Method(), ctx.OriginalURL(), nil)
 			mix_http.ServeError(NewResponseWriter(ctx), httpReq, errors.InvalidArgument.Msg(err.Error()))
 			return nil
 		}
 
-		res, reserr := service(ctx.Context(), req)
+		res, reserr := service(ctx.RequestCtx(), req)
 		if reserr != nil {
-			httpReq, _ := http.NewRequestWithContext(ctx.Context(), ctx.Method(), ctx.OriginalURL(), nil)
+			httpReq, _ := http.NewRequestWithContext(ctx.RequestCtx(), ctx.Method(), ctx.OriginalURL(), nil)
 			mix_http.ServeError(NewResponseWriter(ctx), httpReq, reserr)
 			return nil
 		}

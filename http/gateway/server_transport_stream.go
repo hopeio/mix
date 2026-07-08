@@ -20,8 +20,9 @@ func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], Res
 	return &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
 }
 
-func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SetTrailer(md metadata.MD) {
+func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SetTrailer(md metadata.MD) error {
 	s.setTrailer(md)
+	return nil
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) Send(msg RespPtr) error {

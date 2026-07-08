@@ -72,7 +72,7 @@ func (w *ResponseWriter) RespondStream(ctx context.Context, dataSource iter.Seq[
 var _ http.Flusher = (*ResponseWriter)(nil)
 
 func NewResponseWriter(ctx fiber.Ctx) *ResponseWriter {
-	return &ResponseWriter{Ctx: ctx}
+	return &ResponseWriter{Ctx: ctx, reqHeader: fiberReqHeader(ctx)}
 }
 
 func fiberReqHeader(ctx fiber.Ctx) http.Header {

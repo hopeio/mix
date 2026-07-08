@@ -12,6 +12,7 @@ import (
 type streamBase struct {
 	w           http.ResponseWriter
 	r           *http.Request
+	metaCtx     context.Context
 	method      string
 	trailers    metadata.MD
 	started     bool
@@ -22,11 +23,12 @@ func newStreamBase(w http.ResponseWriter, r *http.Request) streamBase {
 	return streamBase{
 		w:           w,
 		r:           r,
+		metaCtx:     NewMetadataContext(r.Context(), r.Header),
 		contentType: r.Header.Get(httpx.HeaderContentType),
 	}
 }
 
-func (b *streamBase) Context() context.Context { return b.r.Context() }
+func (b *streamBase) Context() context.Context { return b.metaCtx }
 
 func (b *streamBase) Method() string { return b.method }
 
@@ -51,14 +53,8 @@ func (b *streamBase) setTrailer(md metadata.MD) {
 	}
 }
 
-func (b *streamBase) bindContext(ctx context.Context) {
-	if b.r != nil {
-		b.r = b.r.WithContext(ctx)
-	}
-}
-
 func (b *streamBase) sendFrame(msg proto.Message) error {
-	data, ct, err := DefaultMarshal(b.r.Context(), msg)
+	data, ct, err := DefaultMarshal(b.metaCtx, msg)
 	if err != nil {
 		return err
 	}

@@ -18,11 +18,12 @@ type ServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPt
 }
 
 func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](ctx *gin.Context) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
-	return &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{ginStreamBase: newGinStreamBase(ctx)}
+	return  &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{ginStreamBase: newGinStreamBase(ctx)}
 }
 
-func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SetTrailer(md metadata.MD) {
+func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SetTrailer(md metadata.MD) error {
 	s.setTrailer(md)
+	return nil
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) Send(msg RespPtr) error {
@@ -50,7 +51,7 @@ func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error
 	if err != nil {
 		return err
 	}
-	return gatewayx.DefaultUnmarshal(s.ctx.Request.Context(), s.contentType, data, pm)
+	return gatewayx.DefaultUnmarshal(s.ctx, s.contentType, data, pm)
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SendMsg(m any) error {

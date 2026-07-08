@@ -18,6 +18,7 @@ import (
 
 type fiberStreamBase struct {
 	ctx         fiber.Ctx
+	metaCtx     context.Context
 	w           *ResponseWriter
 	method      string
 	trailers    metadata.MD
@@ -26,14 +27,16 @@ type fiberStreamBase struct {
 }
 
 func newFiberStreamBase(ctx fiber.Ctx) fiberStreamBase {
+	w := NewResponseWriter(ctx)
 	return fiberStreamBase{
 		ctx:         ctx,
-		w:           NewResponseWriter(ctx),
+		metaCtx:     gatewayx.NewMetadataContext(ctx, w.reqHeader),
+		w:           w,
 		contentType: string(ctx.Request().Header.ContentType()),
 	}
 }
 
-func (b *fiberStreamBase) Context() context.Context { return b.ctx.Context() }
+func (b *fiberStreamBase) Context() context.Context { return b.metaCtx }
 
 func (b *fiberStreamBase) Method() string { return b.method }
 
@@ -79,7 +82,7 @@ func (b *fiberStreamBase) finalize(err error) {
 }
 
 func (b *fiberStreamBase) sendFrame(msg proto.Message) error {
-	data, contentType, err := gatewayx.DefaultMarshal(b.ctx.Context(), msg)
+	data, contentType, err := gatewayx.DefaultMarshal(b.metaCtx, msg)
 	if err != nil {
 		return err
 	}

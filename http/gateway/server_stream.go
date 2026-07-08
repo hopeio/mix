@@ -26,7 +26,9 @@ type ServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.P
 }
 
 func NewServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerStream[Req, Resp, ReqPtr, RespPtr] {
-	return &ServerStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
+	stream := &ServerStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
+	stream.metaCtx = grpc.NewContextWithServerTransportStream(stream.Context(), &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{streamBase: stream.streamBase})
+	return stream
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) forServerSendOnly() {
@@ -69,7 +71,7 @@ func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	return DefaultUnmarshal(s.r.Context(), s.contentType, data, pm)
+	return DefaultUnmarshal(s.metaCtx, s.contentType, data, pm)
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) SendAndClose(msg RespPtr) error {

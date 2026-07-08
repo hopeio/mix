@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	grpcx "github.com/hopeio/gox/net/http/grpc"
 	gatewayx "github.com/hopeio/mix/http/gateway"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -19,7 +20,9 @@ type ServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.P
 }
 
 func NewServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](ctx fiber.Ctx) *ServerStream[Req, Resp, ReqPtr, RespPtr] {
-	return &ServerStream[Req, Resp, ReqPtr, RespPtr]{fiberStreamBase: newFiberStreamBase(ctx)}
+	stream := &ServerStream[Req, Resp, ReqPtr, RespPtr]{fiberStreamBase: newFiberStreamBase(ctx)}
+	stream.metaCtx = grpc.NewContextWithServerTransportStream(stream.Context(), &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{fiberStreamBase: stream.fiberStreamBase})
+	return stream
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) forServerSendOnly() { s.noRecv = true }
@@ -54,7 +57,7 @@ func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	return gatewayx.DefaultUnmarshal(s.ctx.Context(), s.contentType, data, pm)
+	return gatewayx.DefaultUnmarshal(s.metaCtx, s.contentType, data, pm)
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) SendAndClose(msg RespPtr) error {

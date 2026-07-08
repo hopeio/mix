@@ -42,14 +42,14 @@ func (s RequestSource) Header() kvstruct.ValuesGetter {
 
 func (s RequestSource) Body() (context.Context, string, io.ReadCloser) {
 	if s.Method() == http.MethodGet {
-		return s.Context(), "", nil
+		return s.RequestCtx(), "", nil
 	}
 	contentType := stringsx.FromBytes(s.Request().Header.ContentType())
 	req := s.Ctx.Request()
 	if req.IsBodyStream() {
-		return s.Context(), contentType, iox.WrapReader(req.BodyStream(), req.CloseBodyStream)
+		return s.RequestCtx(), contentType, iox.WrapReader(req.BodyStream(), req.CloseBodyStream)
 	}
-	return s.Context(), contentType, iox.RawBytes(req.Body())
+	return s.RequestCtx(), contentType, iox.RawBytes(req.Body())
 }
 
 type ArgsSource fasthttp.Args

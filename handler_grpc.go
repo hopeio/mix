@@ -75,9 +75,9 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 	md.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, md.TraceId))
 	md.ServerTransportStream = grpc.ServerTransportStreamFromContext(ctx)
 	var ok bool
-	md.GrpcMD, ok = metadata.FromIncomingContext(ctx)
+	md.IncomingMD, ok = metadata.FromIncomingContext(ctx)
 	if !ok {
-		md.GrpcMD = nil
+		md.IncomingMD = nil
 	}
 	if err = validator.ValidateStruct(req); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -119,9 +119,9 @@ func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *g
 	md.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, md.TraceId))
 	md.ServerTransportStream = grpc.ServerTransportStreamFromContext(ctx)
 	var ok bool
-	md.GrpcMD, ok = metadata.FromIncomingContext(ctx)
+	md.IncomingMD, ok = metadata.FromIncomingContext(ctx)
 	if !ok {
-		md.GrpcMD = nil
+		md.IncomingMD = nil
 	}
 	wrapper := &recvWrapper{
 		ServerStream: stream,
