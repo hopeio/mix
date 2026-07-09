@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 
-	pb "github.com/hopeio/mix/_example/proto"
 	"github.com/hopeio/gox/log"
-	grpcx "github.com/hopeio/gox/net/http/grpc"
+	pb "github.com/hopeio/mix/_example/proto"
+	user "github.com/hopeio/mix/_example/proto"
+	grpcx "github.com/hopeio/mix/grpc"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )

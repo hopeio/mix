@@ -14,14 +14,14 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	iox "github.com/hopeio/gox/io"
-	mix_http "github.com/hopeio/mix/http"
+	"github.com/hopeio/mix"
 	stringsx "github.com/hopeio/gox/strings"
 	"github.com/hopeio/gox/kvstruct"
 	"github.com/valyala/fasthttp"
 )
 
 func Bind(c fiber.Ctx, obj interface{}) error {
-	return mix_http.CommonBind(RequestSource{c}, obj)
+	return mix.CommonBind(RequestSource{c}, obj)
 }
 
 type RequestSource struct {

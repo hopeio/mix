@@ -2,7 +2,7 @@ syntax = "proto3";
 package user;
 
 import "patch/go.proto";;
-import "hopeio/time/timestamp/timestamp.proto";
+
 import "protoc-gen-openapiv2/options/annotations.proto";
 import "hopeio/utils/validator/validator.proto";
 import "google/api/annotations.proto";

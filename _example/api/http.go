@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"github.com/hopeio/mix/_example/service"
-	"github.com/hopeio/gox/net/http/grpc/gateway"
+	"github.com/hopeio/mix/grpc/gateway"
 )
 
 func HttpHandler() http.Handler {

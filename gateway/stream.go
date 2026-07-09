@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	httpx "github.com/hopeio/gox/net/http"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -38,7 +39,7 @@ func readGRPCFrame(body io.Reader) ([]byte, error) {
 
 // WriteGRPCFrame 将单条消息编码为 gRPC length-prefixed 帧写入 w。
 func WriteGRPCFrame(w io.Writer, ctx context.Context, msg proto.Message) error {
-	data, _, err := DefaultMarshal(ctx, msg)
+	data, _, err := mix.DefaultMarshal(ctx, msg)
 	if err != nil {
 		return err
 	}

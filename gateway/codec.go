@@ -4,9 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hopeio/mix"
 	jsonx "github.com/hopeio/gox/encoding/json"
-	errorsx "github.com/hopeio/gox/errors"
-	http "github.com/hopeio/mix/http"
 	httpx "github.com/hopeio/gox/net/http"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -15,65 +14,67 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-var DefaultMarshal http.MarshalFunc = func(ctx context.Context, v any) (data []byte, contentType string, err error) {
-	switch msg := v.(type) {
-	case *wrapperspb.StringValue:
-		v = msg.Value
-	case *wrapperspb.BoolValue:
-		v = msg.Value
-	case *wrapperspb.Int32Value:
-		v = msg.Value
-	case *wrapperspb.Int64Value:
-		v = msg.Value
-	case *wrapperspb.UInt32Value:
-		v = msg.Value
-	case *wrapperspb.UInt64Value:
-		v = msg.Value
-	case *wrapperspb.FloatValue:
-		v = msg.Value
-	case *wrapperspb.DoubleValue:
-		v = msg.Value
-	case *wrapperspb.BytesValue:
-		v = msg.Value
-	case *http.CommonAnyResp, *http.ErrResp:
-		data, err := jsonx.Marshal(msg)
-		if err != nil {
-			return data, httpx.ContentTypeText, err
+func init() {
+	mix.DefaultMarshal = func(ctx context.Context, v any) (data []byte, contentType string, err error) {
+		switch msg := v.(type) {
+		case *wrapperspb.StringValue:
+			v = msg.Value
+		case *wrapperspb.BoolValue:
+			v = msg.Value
+		case *wrapperspb.Int32Value:
+			v = msg.Value
+		case *wrapperspb.Int64Value:
+			v = msg.Value
+		case *wrapperspb.UInt32Value:
+			v = msg.Value
+		case *wrapperspb.UInt64Value:
+			v = msg.Value
+		case *wrapperspb.FloatValue:
+			v = msg.Value
+		case *wrapperspb.DoubleValue:
+			v = msg.Value
+		case *wrapperspb.BytesValue:
+			v = msg.Value
+		case *mix.CommonAnyResp, *mix.ErrResp:
+			data, err := jsonx.Marshal(msg)
+			if err != nil {
+				return data, httpx.ContentTypeText, err
+			}
+			return data, httpx.ContentTypeJson, nil
+		case error:
+			data, err := jsonx.Marshal(mix.ErrRespFrom(msg))
+			if err != nil {
+				return data, httpx.ContentTypeText, err
+			}
+			return data, httpx.ContentTypeJson, nil
 		}
-		return data, httpx.ContentTypeJson, nil
-	case error:
-		data, err := jsonx.Marshal(http.ErrRespFrom(msg))
+		data, err = jsonx.Marshal(&mix.CommonAnyResp{Data: v})
 		if err != nil {
 			return data, httpx.ContentTypeText, err
 		}
 		return data, httpx.ContentTypeJson, nil
 	}
-	data, err = jsonx.Marshal(&http.CommonAnyResp{Data: v})
-	if err != nil {
-		return data, httpx.ContentTypeText, err
-	}
-	return data, httpx.ContentTypeJson, nil
-}
 
-var DefaultUnmarshal = func(ctx context.Context, contentType string, data []byte, v any) error {
-	if strings.HasSuffix(contentType, "protobuf") {
-		return proto.Unmarshal(data, v.(proto.Message))
-	}
-	var wrapped http.CommonAnyResp
-	if err := jsonx.Unmarshal(data, &wrapped); err == nil && wrapped.Data != nil {
-		inner, err := jsonx.Marshal(wrapped.Data)
-		if err != nil {
-			return status.Errorf(codes.InvalidArgument, "marshal frame data: %v", err)
+	mix.DefaultUnmarshal = func(ctx context.Context, contentType string, data []byte, v any) error {
+		if strings.HasSuffix(contentType, "protobuf") {
+			return proto.Unmarshal(data, v.(proto.Message))
 		}
-		if err := unmarshalInner(inner, v); err != nil {
+		var wrapped mix.CommonAnyResp
+		if err := jsonx.Unmarshal(data, &wrapped); err == nil && wrapped.Data != nil {
+			inner, err := jsonx.Marshal(wrapped.Data)
+			if err != nil {
+				return status.Errorf(codes.InvalidArgument, "marshal frame data: %v", err)
+			}
+			if err := unmarshalInner(inner, v); err != nil {
+				return status.Errorf(codes.InvalidArgument, "unmarshal frame: %v", err)
+			}
+			return nil
+		}
+		if err := jsonx.Unmarshal(data, v); err != nil {
 			return status.Errorf(codes.InvalidArgument, "unmarshal frame: %v", err)
 		}
 		return nil
 	}
-	if err := jsonx.Unmarshal(data, v); err != nil {
-		return status.Errorf(codes.InvalidArgument, "unmarshal frame: %v", err)
-	}
-	return nil
 }
 
 func unmarshalInner(inner []byte, v any) error {
@@ -170,23 +171,23 @@ func JsonMarshal(ctx context.Context, v any) (data []byte, contentType string, e
 		v = msg.Value
 	case *wrapperspb.BytesValue:
 		v = msg.Value
-	case *http.CommonAnyResp, *http.ErrResp:
+	case *mix.CommonAnyResp, *mix.ErrResp:
 		data, err := jsonx.Marshal(msg)
 		if err != nil {
 			return data, httpx.ContentTypeText, err
 		}
 		return data, httpx.ContentTypeJson, nil
 	case *spb.Status:
-		data, _ = jsonx.Marshal(http.NewErrResp(errorsx.ErrCode(int(msg.Code)), msg.Message))
+		data, _ = jsonx.Marshal(mix.NewErrResp(mix.ErrCode(msg.Code), msg.Message))
 		return data, httpx.ContentTypeJson, nil
 	case *status.Status:
-		data, _ = jsonx.Marshal(http.NewErrResp(errorsx.ErrCode(msg.Code()), msg.Message()))
+		data, _ = jsonx.Marshal(mix.NewErrResp(mix.ErrCode(msg.Code()), msg.Message()))
 		return data, httpx.ContentTypeJson, nil
 	case error:
-		data, _ = jsonx.Marshal(http.ErrRespFrom(msg))
+		data, _ = jsonx.Marshal(mix.ErrRespFrom(msg))
 		return data, httpx.ContentTypeJson, nil
 	}
-	data, err = jsonx.Marshal(&http.CommonAnyResp{Data: v})
+	data, err = jsonx.Marshal(&mix.CommonAnyResp{Data: v})
 	if err != nil {
 		return data, httpx.ContentTypeText, err
 	}

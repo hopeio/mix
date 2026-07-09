@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 
-	grpcx "github.com/hopeio/gox/net/http/grpc"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -13,19 +13,19 @@ import (
 )
 
 var _ grpc.ServerStream = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
-var _ grpcx.ClientSideStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty] = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
-var _ grpcx.ServerSideStream[emptypb.Empty, *emptypb.Empty] = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
+var _ mix.ClientSideStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty] = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
+var _ mix.ServerSideStream[emptypb.Empty, *emptypb.Empty] = (*ServerStream[emptypb.Empty, emptypb.Empty, *emptypb.Empty, *emptypb.Empty])(nil)
 
 // ServerStream 服务端 handler 持有的 gRPC stream（grpc.ServerStream 语义）。
 // 通过 noRecv / unaryResponse 区分 server streaming、client streaming、bidi。
-type ServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]] struct {
+type ServerStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]] struct {
 	streamBase
 	closed        bool
 	noRecv        bool
 	unaryResponse bool
 }
 
-func NewServerStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerStream[Req, Resp, ReqPtr, RespPtr] {
+func NewServerStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerStream[Req, Resp, ReqPtr, RespPtr] {
 	stream := &ServerStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
 	stream.metaCtx = grpc.NewContextWithServerTransportStream(stream.Context(), &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{streamBase: stream.streamBase})
 	return stream
@@ -71,7 +71,7 @@ func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	return DefaultUnmarshal(s.metaCtx, s.contentType, data, pm)
+	return mix.DefaultUnmarshal(s.metaCtx, s.contentType, data, pm)
 }
 
 func (s *ServerStream[Req, Resp, ReqPtr, RespPtr]) SendAndClose(msg RespPtr) error {

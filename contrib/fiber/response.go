@@ -5,8 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	httpx "github.com/hopeio/gox/net/http"
-	mix_http "github.com/hopeio/mix/http"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"github.com/hopeio/mix"
+	gatewayx "github.com/hopeio/mix/gateway"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/protobuf/proto"
 )
@@ -16,18 +16,18 @@ var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 	var buf []byte
 	var err error
 	switch rb := message.(type) {
-	case mix_http.Responder:
+	case mix.Responder:
 		rb.Respond(ctx, NewResponseWriter(ctx))
 		return nil
-	case mix_http.ResponseBody:
+	case mix.ResponseBody:
 		buf, contentType = rb.ResponseBody()
-	case mix_http.XXXResponseBody:
-		buf, contentType, err = gatewayx.DefaultMarshal(ctx, rb.XXX_ResponseBody())
+	case mix.XXXResponseBody:
+		buf, contentType, err = mix.DefaultMarshal(ctx, rb.XXX_ResponseBody())
 		if err != nil {
 			return err
 		}
 	default:
-		buf, contentType, err = gatewayx.DefaultMarshal(ctx, message)
+		buf, contentType, err = mix.DefaultMarshal(ctx, message)
 		if err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ var HandleResponseMessage = func(ctx fiber.Ctx, message proto.Message) error {
 var HttpError = func(ctx fiber.Ctx, err error) {
 	s := gatewayx.ErrRespFromError(err)
 	errcodeHeader := strconv.Itoa(int(s.Code))
-	buf, contentType, _ := gatewayx.DefaultMarshal(ctx.RequestCtx(), s)
+	buf, contentType, _ := mix.DefaultMarshal(ctx.RequestCtx(), s)
 	ctx.Set(httpx.HeaderContentType, contentType)
 	ctx.Set(httpx.HeaderGrpcStatus, errcodeHeader)
 	ctx.Set(httpx.HeaderErrorCode, errcodeHeader)

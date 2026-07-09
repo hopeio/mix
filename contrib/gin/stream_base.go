@@ -9,7 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	httpx "github.com/hopeio/gox/net/http"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"github.com/hopeio/mix"
+	gatewayx "github.com/hopeio/mix/gateway"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -77,7 +78,7 @@ func (b *ginStreamBase) finalize(err error) {
 }
 
 func (b *ginStreamBase) sendFrame(msg proto.Message) error {
-	data, contentType, err := gatewayx.DefaultMarshal(b.metaCtx, msg)
+	data, contentType, err := mix.DefaultMarshal(b.metaCtx, msg)
 	if err != nil {
 		return err
 	}

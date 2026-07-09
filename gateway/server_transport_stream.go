@@ -4,19 +4,19 @@ import (
 	"io"
 	"net/http"
 
-	grpcx "github.com/hopeio/gox/net/http/grpc"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 // ServerTransportStream 双向 streaming；Unary 路径也用它承载 metadata。
-type ServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]] struct {
+type ServerTransportStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]] struct {
 	streamBase
 	closed bool
 }
 
-func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
+func NewServerTransportStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]](w http.ResponseWriter, r *http.Request) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
 	return &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{streamBase: newStreamBase(w, r)}
 }
 
@@ -50,7 +50,7 @@ func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error
 	if err != nil {
 		return err
 	}
-	return DefaultUnmarshal(s.r.Context(), s.contentType, data, pm)
+	return mix.DefaultUnmarshal(s.r.Context(), s.contentType, data, pm)
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SendMsg(m any) error {

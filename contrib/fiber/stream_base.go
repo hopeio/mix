@@ -9,7 +9,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	httpx "github.com/hopeio/gox/net/http"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	gatewayx "github.com/hopeio/mix/gateway"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -82,7 +83,7 @@ func (b *fiberStreamBase) finalize(err error) {
 }
 
 func (b *fiberStreamBase) sendFrame(msg proto.Message) error {
-	data, contentType, err := gatewayx.DefaultMarshal(b.metaCtx, msg)
+	data, contentType, err := mix.DefaultMarshal(b.metaCtx, msg)
 	if err != nil {
 		return err
 	}

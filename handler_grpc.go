@@ -27,6 +27,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type GRPCStatus interface {
+	GRPCStatus() *status.Status
+}
+
 func (s *Server) grpcHandler() *grpc.Server {
 	//conf := s.Config
 	grpclog.SetLoggerV2(zapgrpc.NewLogger(log.NoCallerLogger().With(zap.String("server", "grpc")).Logger))
@@ -55,10 +59,6 @@ func (s *Server) grpcHandler() *grpc.Server {
 		return grpcServer
 	}
 	return nil
-}
-
-type GRPCStatus interface {
-	GRPCStatus() *status.Status
 }
 
 func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {

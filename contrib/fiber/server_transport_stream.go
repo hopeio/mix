@@ -4,19 +4,18 @@ import (
 	"io"
 
 	"github.com/gofiber/fiber/v3"
-	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-type ServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]] struct {
+type ServerTransportStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]] struct {
 	fiberStreamBase
 	closed bool
 }
 
-func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](ctx fiber.Ctx) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
+func NewServerTransportStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]](ctx fiber.Ctx) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
 	return &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{fiberStreamBase: newFiberStreamBase(ctx)}
 }
 
@@ -50,7 +49,7 @@ func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error
 	if err != nil {
 		return err
 	}
-	return gatewayx.DefaultUnmarshal(s.metaCtx, s.contentType, data, pm)
+	return mix.DefaultUnmarshal(s.metaCtx, s.contentType, data, pm)
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SendMsg(m any) error {

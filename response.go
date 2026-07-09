@@ -4,22 +4,28 @@
  * @Created by jyb
  */
 
-package http
+package mix
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
 	"mime"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strconv"
 
-	errorsx "github.com/hopeio/gox/errors"
 	iox "github.com/hopeio/gox/io"
-	"github.com/hopeio/gox/strings"
 	httpx "github.com/hopeio/gox/net/http"
+	"github.com/hopeio/gox/strings"
+	stringsx "github.com/hopeio/gox/strings"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 type ResponseWriter interface {
@@ -32,11 +38,11 @@ type Responder interface {
 	Respond(ctx context.Context, w http.ResponseWriter) (int, error)
 }
 
-var errCodeHttpStatusMap = map[errorsx.ErrCode]int{
-	errorsx.Success: http.StatusOK,
+var errCodeHttpStatusMap = map[ErrCode]int{
+	Success: http.StatusOK,
 }
 
-func RegisterErrCodeHttpStatus(code errorsx.ErrCode, status int) {
+func RegisterErrCodeHttpStatus(code ErrCode, status int) {
 	errCodeHttpStatusMap[code] = status
 }
 
@@ -48,7 +54,7 @@ func RespodWithErrHeader(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ErrHeaderKey, true)
 }
 
-func StatusFromErrCode(code errorsx.ErrCode) int {
+func StatusFromErrCode(code ErrCode) int {
 	if status, ok := errCodeHttpStatusMap[code]; ok {
 		return status
 	}
@@ -57,7 +63,7 @@ func StatusFromErrCode(code errorsx.ErrCode) int {
 
 // CommonResp 主要用来接收返回，发送请使用 CommonAnyResp
 type CommonResp[T any] struct {
-	Code errorsx.ErrCode `json:"code"`
+	Code ErrCode `json:"code"`
 	Msg  string          `json:"msg,omitempty"`
 	//验证码
 	Data T `json:"data,omitempty"`
@@ -74,21 +80,21 @@ func (res *CommonResp[T]) Respond(ctx context.Context, w http.ResponseWriter) (i
 	}
 	if wx, ok := w.(ResponseWriter); ok {
 		header := wx.HeaderX()
-		if res.Code != errorsx.Success && ctx.Value(ErrHeaderKey) != nil {
+		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
 			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
 			header.Set(httpx.HeaderErrorMsg, res.Msg)
 		}
 		header.Set(httpx.HeaderContentType, contentType)
 	} else {
 		header := w.Header()
-		if res.Code != errorsx.Success && ctx.Value(ErrHeaderKey) != nil {
+		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
 			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
 			header.Set(httpx.HeaderErrorMsg, res.Msg)
 		}
 		header.Set(httpx.HeaderContentType, contentType)
 	}
 
-	if res.Code != errorsx.Success {
+	if res.Code != Success {
 		w.WriteHeader(StatusFromErrCode(res.Code))
 	} else {
 		w.WriteHeader(http.StatusOK)
@@ -104,9 +110,92 @@ func (res *CommonResp[T]) Respond(ctx context.Context, w http.ResponseWriter) (i
 	return w.Write(data)
 }
 
+type CommonProtoResp[T proto.Message]  CommonResp[T]
+
+func NewCommonProtoResp[T proto.Message](code ErrCode, msg string, data T) *CommonProtoResp[T] {
+	return &CommonProtoResp[T]{Code: code, Msg: msg, Data: data}
+}
+
+func (r *CommonProtoResp[T]) MarshalProto() ([]byte, error) {
+	buf := make([]byte, 0, 64)
+
+	if r.Code != 0 {
+		buf = protowire.AppendVarint(buf, 0x08)
+		buf = protowire.AppendVarint(buf, uint64(r.Code))
+	}
+
+	// 编码 Msg 字段 (field number 2, string)
+	if r.Msg != "" {
+		buf = protowire.AppendVarint(buf, 0x12)
+		buf = protowire.AppendString(buf, r.Msg)
+	}
+
+	// 编码 Data 字段 (field number 3, bytes)
+	if r.Code == 0 {
+		buf = append(buf, 0)
+		var err error
+		buf, err = proto.MarshalOptions{}.MarshalAppend(buf, r.Data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf, nil
+}
+
+// UnmarshalProto 手动解码 protobuf 数据到 CommonProtoResp
+func (r *CommonProtoResp[T]) UnmarshalProto(data []byte) error {
+	var pos int
+	if data[0] == 0 {
+		if reflect.ValueOf(r.Data).IsNil() {
+			r.Data = r.Data.ProtoReflect().New().Interface().(T)
+		}
+		if len(data[pos:]) > 0 {
+			return proto.Unmarshal(data[1:], r.Data)
+		}
+		return nil
+	}
+	for pos < len(data) {
+		// 解析标签 (tag 和 wire type)
+		tag, n := protowire.ConsumeVarint(data[pos:])
+		if n < 0 {
+			return errors.New("invalid protobuf data: unable to consume varint")
+		}
+		pos += n
+
+		fieldNum, wireType := protowire.DecodeTag(tag)
+		switch fieldNum {
+		case 1: // Code 字段
+			if wireType != protowire.VarintType {
+				return errors.New("invalid wire type for Code field")
+			}
+			code, n := protowire.ConsumeVarint(data[pos:])
+			if n < 0 {
+				return errors.New("invalid protobuf data: unable to consume Code varint")
+			}
+			r.Code = ErrCode(code)
+			pos += n
+
+		case 2: // Msg 字段
+			if wireType != protowire.BytesType {
+				return errors.New("invalid wire type for Msg field")
+			}
+			msg, n := protowire.ConsumeString(data[pos:])
+			if n < 0 {
+				return errors.New("invalid protobuf data: unable to consume Msg string")
+			}
+			r.Msg = msg
+			pos += n
+		}
+	}
+
+	return nil
+}
+
+
 type CommonAnyResp = CommonResp[any]
 
-func NewCommonAnyResp(code errorsx.ErrCode, msg string, data any) *CommonAnyResp {
+func NewCommonAnyResp(code ErrCode, msg string, data any) *CommonAnyResp {
 	return &CommonAnyResp{
 		Code: code,
 		Msg:  msg,
@@ -114,11 +203,11 @@ func NewCommonAnyResp(code errorsx.ErrCode, msg string, data any) *CommonAnyResp
 	}
 }
 
-func ServeErrCodeMsg(w http.ResponseWriter, r *http.Request, code errorsx.ErrCode, msg string) {
+func ServeErrCodeMsg(w http.ResponseWriter, r *http.Request, code ErrCode, msg string) {
 	NewErrResp(code, msg).ServeHTTP(w, r)
 }
 
-func RespondErrCodeMsg(ctx context.Context, w http.ResponseWriter, code errorsx.ErrCode, msg string) {
+func RespondErrCodeMsg(ctx context.Context, w http.ResponseWriter, code ErrCode, msg string) {
 	NewErrResp(code, msg).Respond(ctx, w)
 }
 
@@ -137,7 +226,7 @@ func ServeSuccess(w http.ResponseWriter, r *http.Request, res any) {
 func RespondSuccess(ctx context.Context, w http.ResponseWriter, res any) (int, error) {
 	data, contentType, err := DefaultMarshal(ctx, res)
 	if err != nil {
-		return  RespondError(ctx, w, err)
+		return RespondError(ctx, w, err)
 	}
 	if wx, ok := w.(ResponseWriter); ok {
 		wx.HeaderX().Set(httpx.HeaderContentType, contentType)
@@ -195,9 +284,12 @@ func (res *Response) Respond(ctx context.Context, w http.ResponseWriter) (int, e
 	return int(n), err
 }
 
-type ErrResp errorsx.ErrResp
+type ErrResp struct {
+	Code ErrCode `json:"code"`
+	Msg  string  `json:"msg,omitempty"`
+}
 
-func NewErrResp(code errorsx.ErrCode, msg string) *ErrResp {
+func NewErrResp(code ErrCode, msg string) *ErrResp {
 	return &ErrResp{
 		Code: code,
 		Msg:  msg,
@@ -211,7 +303,19 @@ func ErrRespFrom(err error) *ErrResp {
 	if errresp, ok := err.(*ErrResp); ok {
 		return errresp
 	}
-	return (*ErrResp)(errorsx.ErrRespFrom(err))
+	type errresp interface{ ErrResp() *ErrResp }
+	if se, ok := err.(errresp); ok {
+		return se.ErrResp()
+	}
+	rv := reflect.ValueOf(err)
+	kind := rv.Kind()
+	if kind >= reflect.Int && kind <= reflect.Int64 {
+		return NewErrResp(ErrCode(rv.Int()), err.Error())
+	}
+	if kind >= reflect.Uint && kind <= reflect.Uint64 {
+		return NewErrResp(ErrCode(rv.Uint()), err.Error())
+	}
+	return NewErrResp(Unknown, err.Error())
 }
 
 func (res *ErrResp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -222,20 +326,20 @@ func (res *ErrResp) Respond(ctx context.Context, w http.ResponseWriter) (int, er
 	data, contentType, _ := DefaultMarshal(ctx, res)
 	if wx, ok := w.(ResponseWriter); ok {
 		header := wx.HeaderX()
-		if res.Code != errorsx.Success && ctx.Value(ErrHeaderKey) != nil {
+		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
 			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
 			header.Set(httpx.HeaderErrorMsg, res.Msg)
 		}
 		header.Set(httpx.HeaderContentType, contentType)
 	} else {
 		header := w.Header()
-		if res.Code != errorsx.Success && ctx.Value(ErrHeaderKey) != nil {
+		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
 			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
 			header.Set(httpx.HeaderErrorMsg, res.Msg)
 		}
 		header.Set(httpx.HeaderContentType, contentType)
 	}
-	if res.Code != errorsx.Success {
+	if res.Code != Success {
 		w.WriteHeader(StatusFromErrCode(res.Code))
 	} else {
 		w.WriteHeader(http.StatusOK)
@@ -250,13 +354,22 @@ func (res *ErrResp) Respond(ctx context.Context, w http.ResponseWriter) (int, er
 	return w.Write(data)
 }
 
-func (res *ErrResp) ErrResp() *errorsx.ErrResp {
-	return (*errorsx.ErrResp)(res)
+func (res *ErrResp) ErrResp() *ErrResp {
+	return (*ErrResp)(res)
 }
 
-func (res *ErrResp) Error() string {
-	return res.ErrResp().Error()
+func (x *ErrResp) GRPCStatus() *status.Status {
+	return status.New(codes.Code(x.Code), x.Msg)
 }
+
+func (x *ErrResp) Error() string {
+	return fmt.Sprintf("code: %d, msg: %s", x.Code, x.Msg)
+}
+
+func (x *ErrResp) MarshalJSON() ([]byte, error) {
+	return stringsx.ToBytes(`{"code":` + strconv.Itoa(int(x.Code)) + `,"msg":` + strconv.Quote(x.Msg) + `}`), nil
+}
+
 
 type ResponseStream struct {
 	Status  int                          `json:"status,omitempty"`

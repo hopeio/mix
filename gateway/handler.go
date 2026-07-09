@@ -4,17 +4,16 @@ import (
 	"context"
 	"net/http"
 
-	grpcx "github.com/hopeio/gox/net/http/grpc"
-	httpx "github.com/hopeio/mix/http"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
-func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](gprcHanlder grpcx.GrpcHandler[Req, Resp, ReqPtr, RespPtr]) http.Handler {
+func UnaryCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]](gprcHanlder mix.GrpcHandler[Req, Resp, ReqPtr, RespPtr]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Req
 
-		if err := httpx.Bind(r, &req); err != nil {
+		if err := mix.Bind(r, &req); err != nil {
 			HandleError(w, r, err)
 			return
 		}
@@ -34,12 +33,12 @@ func UnaryCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.Prot
 	})
 }
 
-func ServerSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp], S grpcx.ServerSideStream[Resp, RespPtr]](gprcHanlder grpcx.ServerSideStreamHandler[Req, Resp, ReqPtr, RespPtr, S]) http.Handler {
+func ServerSideStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp], S mix.ServerSideStream[Resp, RespPtr]](gprcHanlder mix.ServerSideStreamHandler[Req, Resp, ReqPtr, RespPtr, S]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Req
 		var err error
 
-		if err = httpx.Bind(r, &req); err != nil {
+		if err = mix.Bind(r, &req); err != nil {
 			HandleError(w, r, err)
 			return
 		}
@@ -55,7 +54,7 @@ func ServerSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 	})
 }
 
-func ClientSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp], S grpcx.ClientSideStream[Req, Resp, ReqPtr, RespPtr] ](gprcHanlder grpcx.ClientSideStreamHandler[Req, Resp, ReqPtr, RespPtr, S]) http.Handler {
+func ClientSideStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp], S mix.ClientSideStream[Req, Resp, ReqPtr, RespPtr] ](gprcHanlder mix.ClientSideStreamHandler[Req, Resp, ReqPtr, RespPtr, S]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](w, r)
 		stream.forClientRecv()
@@ -67,7 +66,7 @@ func ClientSideStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr
 	})
 }
 
-func BidiStreamCall[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp], S grpcx.BidiStream[Req, Resp, ReqPtr, RespPtr], GprcHandler grpcx.BidiStreamHandler[Req, Resp, ReqPtr, RespPtr, S]](gprcHanlder GprcHandler) http.Handler {
+func BidiStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp], S mix.BidiStream[Req, Resp, ReqPtr, RespPtr], GprcHandler mix.BidiStreamHandler[Req, Resp, ReqPtr, RespPtr, S]](gprcHanlder GprcHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 

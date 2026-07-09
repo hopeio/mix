@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	httpx "github.com/hopeio/gox/net/http"
-	mix_http "github.com/hopeio/mix/http"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"github.com/hopeio/mix"
+	gatewayx "github.com/hopeio/mix/gateway"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,7 +22,7 @@ var HttpError = func(ctx *gin.Context, err error) {
 	ctx.Header(httpx.HeaderGrpcStatus, errcode)
 	ctx.Header(httpx.HeaderErrorCode, errcode)
 
-	buf, contentType, _ := gatewayx.DefaultMarshal(ctx, s)
+	buf, contentType, _ := mix.DefaultMarshal(ctx, s)
 
 	ctx.Header(httpx.HeaderContentType, contentType)
 	ow := ctx.Writer.(http.ResponseWriter)
@@ -37,8 +37,8 @@ var HttpError = func(ctx *gin.Context, err error) {
 
 func Respond(ctx *gin.Context, v any) {
 	if err, ok := v.(error); ok {
-		mix_http.ServeError(ctx.Writer, ctx.Request, err)
+		mix.ServeError(ctx.Writer, ctx.Request, err)
 		return
 	}
-	mix_http.ServeSuccess(ctx.Writer, ctx.Request, v)
+	mix.ServeSuccess(ctx.Writer, ctx.Request, v)
 }

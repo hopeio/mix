@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	httpx "github.com/hopeio/gox/net/http"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
@@ -54,7 +55,7 @@ func (b *streamBase) setTrailer(md metadata.MD) {
 }
 
 func (b *streamBase) sendFrame(msg proto.Message) error {
-	data, ct, err := DefaultMarshal(b.metaCtx, msg)
+	data, ct, err := mix.DefaultMarshal(b.metaCtx, msg)
 	if err != nil {
 		return err
 	}

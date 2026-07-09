@@ -4,20 +4,19 @@ import (
 	"io"
 
 	"github.com/gin-gonic/gin"
-	grpcx "github.com/hopeio/gox/net/http/grpc"
-	gatewayx "github.com/hopeio/mix/http/gateway"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 // ServerTransportStream 双向 streaming；Unary 路径也用它承载 metadata（grpc.SetHeader 等）。
-type ServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]] struct {
+type ServerTransportStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]] struct {
 	ginStreamBase
 	closed bool
 }
 
-func NewServerTransportStream[Req, Resp any, ReqPtr grpcx.ProtoMessage[Req], RespPtr grpcx.ProtoMessage[Resp]](ctx *gin.Context) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
+func NewServerTransportStream[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.ProtoMessage[Resp]](ctx *gin.Context) *ServerTransportStream[Req, Resp, ReqPtr, RespPtr] {
 	return  &ServerTransportStream[Req, Resp, ReqPtr, RespPtr]{ginStreamBase: newGinStreamBase(ctx)}
 }
 
@@ -51,7 +50,7 @@ func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) RecvMsg(m any) error
 	if err != nil {
 		return err
 	}
-	return gatewayx.DefaultUnmarshal(s.ctx, s.contentType, data, pm)
+	return mix.DefaultUnmarshal(s.ctx, s.contentType, data, pm)
 }
 
 func (s *ServerTransportStream[Req, Resp, ReqPtr, RespPtr]) SendMsg(m any) error {

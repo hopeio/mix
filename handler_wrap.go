@@ -1,10 +1,9 @@
-package http
+package mix
 
 import (
 	"context"
 	"net/http"
 
-	"github.com/hopeio/gox/errors"
 	"github.com/hopeio/gox/types"
 )
 
@@ -32,12 +31,12 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) http.Handler {
 		req := new(REQ)
 		err := Bind(r, req)
 		if err != nil {
-			ServeError(w, r, errors.InvalidArgument.Msg(err.Error()))
+			ServeError(w, r, InvalidArgument.Msg(err.Error()))
 			return
 		}
-		res, err := service(ReqResp{r, w}, req)
-		if err != nil {
-			ServeError(w, r, err)
+		res, resperr := service(ReqResp{r, w}, req)
+		if resperr != nil {
+			ServeError(w, r, resperr)
 			return
 		}
 		switch httpres := any(res).(type) {
@@ -58,7 +57,7 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) http.H
 		req := new(REQ)
 		err := Bind(r, req)
 		if err != nil {
-			ServeError(w, r, errors.InvalidArgument.Wrap(err))
+			ServeError(w, r, InvalidArgument.Wrap(err))
 			return
 		}
 		res, err := service(WrapContext(ReqResp{r, w}), req)
