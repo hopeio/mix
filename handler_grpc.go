@@ -9,6 +9,8 @@ package mix
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -99,6 +101,12 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 		}
 	}
 
+	// 兼容 handler 返回双 nil：grpc 的 proto codec 无法 marshal nil 响应，
+	// 直接返回会报 Internal，需按方法签名构造空响应
+	if err == nil && resp == nil {
+		resp = emptyResp(info)
+	}
+
 	if s.Grpc.RecordFunc != nil {
 		s.Grpc.RecordFunc(ctx, &GrpcAccessLogParam{
 			Method:   info.FullMethod,
@@ -109,6 +117,42 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 		})
 	}
 	return resp, err
+}
+
+// emptyRespTypeCache 缓存 FullMethod -> 响应元素类型，避免每次请求都反射方法签名
+var emptyRespTypeCache sync.Map
+
+// emptyResp 从服务实现的方法签名反射出响应类型并构造空实例。
+// 不能对 nil 的 resp 自身反射（reflect.TypeOf(nil) == nil，调 Elem 必 panic），
+// 只能从 info.Server 的方法签名拿类型。类型按 FullMethod 缓存，
+// 稳定后每次请求仅一次 sync.Map 查询 + 一次小对象分配。
+func emptyResp(info *grpc.UnaryServerInfo) any {
+	if v, ok := emptyRespTypeCache.Load(info.FullMethod); ok {
+		if t, _ := v.(reflect.Type); t != nil {
+			return reflect.New(t).Interface()
+		}
+		return nil
+	}
+	var t reflect.Type
+	if i := strings.LastIndexByte(info.FullMethod, '/'); i >= 0 && i < len(info.FullMethod)-1 {
+		if m, ok := reflect.TypeOf(info.Server).MethodByName(info.FullMethod[i+1:]); ok {
+			ft := m.Type
+			// 生成的服务方法签名为 (ctx, req) (*Resp, error)，取第一个非 error 返回值
+			if ft.NumOut() > 0 && ft.Out(0) != reflect.TypeFor[error]() {
+				rt := ft.Out(0)
+				if rt.Kind() == reflect.Pointer {
+					t = rt.Elem()
+				} else {
+					t = rt
+				}
+			}
+		}
+	}
+	emptyRespTypeCache.Store(info.FullMethod, t)
+	if t == nil {
+		return nil
+	}
+	return reflect.New(t).Interface()
 }
 
 func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
