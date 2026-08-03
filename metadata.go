@@ -36,7 +36,7 @@ type Metadata struct {
 	IncomingMD            metadata.MD
 	ServerTransportStream grpc.ServerTransportStream
 	AccessLogFields       []zap.Field
-	Bagage                baggage.Baggage // can not edit
+	Baggage               baggage.Baggage // can not edit
 }
 
 func (m *Metadata) Set(key, value any) {

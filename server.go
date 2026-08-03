@@ -8,6 +8,7 @@ package mix
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -35,12 +36,15 @@ func NewServer(options ...Option) *Server {
 }
 
 func (s *Server) Run() {
-	baseCtx := context.Background()
+	// BaseContext 作为根上下文（可通过 WithContext 设置），信号取消时一并取消
+	baseCtx := s.BaseContext
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
 	// Handler SIGINT (CTRL+C) gracefully.
+	// 注意：SIGKILL 无法被捕获，无需注册
 	sigCtx, stop := signal.NotifyContext(baseCtx, // kill -SIGINT XXXX 或 Ctrl+c
-		syscall.SIGINT, // register that too, it should be ok
-		// os.Kill等同于syscall.Kill
-		syscall.SIGKILL, // register that too, it should be ok
+		syscall.SIGINT,
 		// kill -SIGTERM XXXX
 		syscall.SIGTERM,
 	)
@@ -84,7 +88,7 @@ func (s *Server) Run() {
 		}
 		r = r.WithContext(WithMetadata(r.Context(), &md))
 		if onePort && strings.HasPrefix(r.Header.Get(httpx.HeaderContentType), httpx.ContentTypeGrpc) {
-			 if r.ProtoMajor == 2 && grpcServer != nil {
+			if r.ProtoMajor == 2 && grpcServer != nil {
 				md.RequestType = RequestTypeGrpc
 				grpcServer.ServeHTTP(w, r)
 			} else {
@@ -96,7 +100,7 @@ func (s *Server) Run() {
 	}), s.Middlewares...)
 
 	s.Server.Handler = handler
-	
+
 	if s.Server.BaseContext == nil {
 		s.Server.BaseContext = func(_ net.Listener) context.Context {
 			return sigCtx
@@ -104,13 +108,14 @@ func (s *Server) Run() {
 	}
 
 	// 为了提供grpc服务,默认启用http2
-	if s.Server.TLSConfig == nil{
+	if s.Server.TLSConfig == nil {
 		s.Server.Protocols = new(http.Protocols)
 		s.Server.Protocols.SetHTTP1(true)
 		s.Server.Protocols.SetUnencryptedHTTP2(true)
 	}
 
-	srvErr := make(chan error, 1)
+	// grpc / http3 / http / internal 四个监听 goroutine 都可能上报错误
+	srvErr := make(chan error, 4)
 
 	if s.Grpc.Addr != "" && s.Grpc.Addr != s.Addr {
 		go func() {
@@ -133,10 +138,11 @@ func (s *Server) Run() {
 		}
 		go func() {
 			log.Infof("http3 listening: %s", s.HTTP3.Addr)
+			// QUIC 必须基于 TLS，证书缺失时直接报错而不是裸监听
 			if s.HTTP3.CertFile != "" && s.HTTP3.KeyFile != "" {
-				srvErr <- s.HTTP3.ListenAndServeTLS(s.CertFile, s.KeyFile)
+				srvErr <- s.HTTP3.ListenAndServeTLS(s.HTTP3.CertFile, s.HTTP3.KeyFile)
 			} else {
-				srvErr <- s.HTTP3.ListenAndServe()
+				srvErr <- errors.New("mix: http3 enabled but HTTP3.CertFile/HTTP3.KeyFile not set, QUIC requires TLS")
 			}
 		}()
 	}
@@ -149,15 +155,19 @@ func (s *Server) Run() {
 		}
 	}()
 
+	// 内部端口使用私有 mux，避免污染全局 http.DefaultServeMux
+	internalMux := http.NewServeMux()
+	s.InternalHandler(internalMux)
+	if s.InternalServer.BaseContext == nil {
+		s.InternalServer.BaseContext = func(_ net.Listener) context.Context {
+			return sigCtx
+		}
+	}
+	if s.InternalServer.Handler == nil {
+		s.InternalServer.Handler = internalMux
+	}
 	go func() {
 		log.Infof("internal listening: %s", s.InternalServer.Addr)
-		s.InternalHandler()
-		if s.InternalServer.BaseContext == nil {
-			s.InternalServer.BaseContext = func(_ net.Listener) context.Context {
-				return sigCtx
-			}
-			s.InternalServer.Handler = http.DefaultServeMux
-		}
 		srvErr <- s.InternalServer.ListenAndServe()
 	}()
 
@@ -173,11 +183,27 @@ func (s *Server) Run() {
 		log.Debug("stop server")
 	}
 
-	//服务关闭
+	//服务关闭：sigCtx 已取消，不能再用它做优雅关停，需新建带超时的 ctx
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	if grpcServer != nil {
-		grpcServer.GracefulStop()
+		grpcStopped := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(grpcStopped)
+		}()
+		select {
+		case <-grpcStopped:
+		case <-shutdownCtx.Done():
+			// 超时后强制关停
+			grpcServer.Stop()
+		}
 	}
-	if err := s.Shutdown(sigCtx); err != nil {
+	if err := s.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Error(err)
+	}
+	if err := s.InternalServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error(err)
 	}
 }

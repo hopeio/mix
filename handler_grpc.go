@@ -9,7 +9,8 @@ package mix
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"sync"
+	"time"
 
 	"github.com/hopeio/gox/log"
 	"github.com/hopeio/gox/validator"
@@ -31,9 +32,12 @@ type GRPCStatus interface {
 	GRPCStatus() *status.Status
 }
 
+var grpcLoggerOnce sync.Once
+
 func (s *Server) grpcHandler() *grpc.Server {
-	//conf := s.Config
-	grpclog.SetLoggerV2(zapgrpc.NewLogger(log.NoCallerLogger().With(zap.String("server", "grpc")).Logger))
+	grpcLoggerOnce.Do(func() {
+		grpclog.SetLoggerV2(zapgrpc.NewLogger(log.NoCallerLogger().With(zap.String("server", "grpc")).Logger))
+	})
 	if s.GrpcHandler != nil {
 		var stream []grpc.StreamServerInterceptor
 		var unary []grpc.UnaryServerInterceptor
@@ -70,7 +74,12 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 			err = status.Error(codes.Internal, sysErrMsg)
 		}
 	}()
+	// 独立 gRPC 端口不经过 HTTP 分发层，ctx 中可能没有 Metadata，此处兜底注入
 	md := GetMetadata(ctx)
+	if md == nil {
+		md = &Metadata{RequestAt: time.Now()}
+		ctx = WithMetadata(ctx, md)
+	}
 	md.TraceId = trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 	md.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, md.TraceId))
 	md.ServerTransportStream = grpc.ServerTransportStreamFromContext(ctx)
@@ -99,11 +108,7 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 			Err:      err,
 		})
 	}
-	if err == nil && resp == nil {
-		resp = reflect.New(reflect.TypeOf(resp).Elem()).Interface()
-	}
 	return resp, err
-
 }
 
 func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
@@ -114,7 +119,12 @@ func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *g
 		}
 	}()
 	ctx := stream.Context()
+	// 独立 gRPC 端口不经过 HTTP 分发层，ctx 中可能没有 Metadata，此处兜底注入
 	md := GetMetadata(ctx)
+	if md == nil {
+		md = &Metadata{RequestAt: time.Now()}
+		ctx = WithMetadata(ctx, md)
+	}
 	md.TraceId = trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 	md.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, md.TraceId))
 	md.ServerTransportStream = grpc.ServerTransportStreamFromContext(ctx)
@@ -125,6 +135,7 @@ func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *g
 	}
 	wrapper := &recvWrapper{
 		ServerStream: stream,
+		ctx:          ctx,
 	}
 	err = handler(srv, wrapper)
 	if err != nil {
@@ -144,6 +155,12 @@ func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *g
 type recvWrapper struct {
 	grpc.ServerStream
 	GrpcAccessLogParam
+	ctx context.Context
+}
+
+// Context 返回注入了 Metadata 的 ctx，保证业务 handler 能取到
+func (s *recvWrapper) Context() context.Context {
+	return s.ctx
 }
 
 func (s *recvWrapper) SendMsg(m interface{}) error {
@@ -152,12 +169,13 @@ func (s *recvWrapper) SendMsg(m interface{}) error {
 }
 
 func (s *recvWrapper) RecvMsg(m interface{}) error {
+	if err := s.ServerStream.RecvMsg(m); err != nil {
+		return err
+	}
+	// 必须先接收数据再校验，否则校验的是零值结构体
 	s.Request = m
 	if err := validator.ValidateStruct(m); err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	if err := s.ServerStream.RecvMsg(m); err != nil {
-		return err
 	}
 	return nil
 }

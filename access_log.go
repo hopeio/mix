@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ContentTypeJson    = "json"
+	ContentTypeJson     = "json"
 	ContentTypeProtobuf = "protobuf"
 )
 
@@ -36,7 +36,18 @@ type AccessLogParam struct {
 	Metadata *Metadata
 }
 
-type AccessLog = func(ctx context.Context, pram *AccessLogParam)
+type AccessLog = func(ctx context.Context, param *AccessLogParam)
+
+// safeStringer 安全地把任意值转成字符串，避免访问日志里的类型断言把服务打崩
+func safeStringer(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(fmt.Stringer); ok {
+		return s.String()
+	}
+	return fmt.Sprintf("%v", v)
+}
 
 func DefaultAccessLog(ctx context.Context, param *AccessLogParam) {
 	reqBodyField := zap.Skip()
@@ -47,7 +58,7 @@ func DefaultAccessLog(ctx context.Context, param *AccessLogParam) {
 		if strings.HasSuffix(param.RequestRecorder.ContentType, ContentTypeJson) {
 			reqBodyField = zap.Reflect("body", json.RawMessage(param.RequestRecorder.Raw))
 		} else if strings.HasSuffix(param.RequestRecorder.ContentType, ContentTypeProtobuf) {
-			reqBodyField = zap.String("body", param.RequestRecorder.Value.(fmt.Stringer).String())
+			reqBodyField = zap.String("body", safeStringer(param.RequestRecorder.Value))
 		} else {
 			reqBodyField = zap.String("body", stringsx.FromBytes(param.RequestRecorder.Raw))
 		}
@@ -60,7 +71,7 @@ func DefaultAccessLog(ctx context.Context, param *AccessLogParam) {
 		if strings.HasSuffix(param.ResponseRecorder.ContentType, ContentTypeJson) {
 			respBodyField = zap.Reflect("response", json.RawMessage(param.ResponseRecorder.Raw))
 		} else if strings.HasSuffix(param.ResponseRecorder.ContentType, ContentTypeProtobuf) {
-			respBodyField = zap.String("response", param.ResponseRecorder.Value.(fmt.Stringer).String())
+			respBodyField = zap.String("response", safeStringer(param.ResponseRecorder.Value))
 		} else {
 			respBodyField = zap.String("response", stringsx.FromBytes(param.ResponseRecorder.Raw))
 		}
@@ -85,7 +96,7 @@ type GrpcAccessLogParam struct {
 	Metadata          *Metadata
 }
 
-type GrpcAccessLog = func(ctx context.Context, pram *GrpcAccessLogParam)
+type GrpcAccessLog = func(ctx context.Context, param *GrpcAccessLogParam)
 
 func DefaultGrpcAccessLog(ctx context.Context, param *GrpcAccessLogParam) {
 	respBodyField := zap.Skip()
@@ -95,14 +106,14 @@ func DefaultGrpcAccessLog(ctx context.Context, param *GrpcAccessLogParam) {
 		codeField = zap.Int32("code", int32(s.Code()))
 		respBodyField = zap.String("response", s.Message())
 	} else {
-		respBodyField = zap.String("response", param.Response.(fmt.Stringer).String())
+		respBodyField = zap.String("response", safeStringer(param.Response))
 	}
 
 	if ce := log.NoCallerLogger().Logger.Check(zap.InfoLevel, "access"); ce != nil {
 		ce.Write(zap.Inline(zap.DictObject(param.Metadata.AccessLogFields...)),
 			zap.String("url", param.Method),
 			zap.String("method", "grpc"),
-			zap.String("body", param.Request.(fmt.Stringer).String()),
+			zap.String("body", safeStringer(param.Request)),
 			log.Context(ctx),
 			zap.Duration("duration", ce.Time.Sub(param.Metadata.RequestAt)),
 			codeField,

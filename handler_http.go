@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/hopeio/gox/log"
 	httpx "github.com/hopeio/gox/net/http"
@@ -22,12 +24,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *Server) InternalHandler() {
+// InternalHandler 往内部端口的私有 mux 上注册 OpenAPI 文档与调试端点
+func (s *Server) InternalHandler(mux *http.ServeMux) {
 	if s.Openapi.Enabled {
-		openapi.Openapi(http.DefaultServeMux, s.Openapi.UriPrefix, s.Openapi.Dir)
+		openapi.Openapi(mux, s.Openapi.UriPrefix, s.Openapi.Dir)
 	}
 	if s.DebugHandler.Enabled {
-		httpx.HandleDebug(s.DebugHandler.UriPrefix)
+		httpx.HandleDebug(mux, s.DebugHandler.UriPrefix)
 	}
 }
 
@@ -54,10 +57,17 @@ func (s *Server) httpHandler() http.Handler {
 			}
 		}
 		md := GetMetadata(r.Context())
+		if md == nil {
+			md = &Metadata{Request: r, ResponseWriter: w, RequestAt: time.Now()}
+		}
 		md.TraceId = trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 		md.Logger = log.DefaultLogger().With(zap.String(log.FieldTraceId, md.TraceId))
-		md.Bagage = baggage.FromContext(r.Context())
-		md.IncomingMD = metadata.MD(r.Header)
+		md.Baggage = baggage.FromContext(r.Context())
+		// gRPC metadata 约定小写 key，HTTP header 是 CanonicalMIME 大小写，需转换
+		md.IncomingMD = make(metadata.MD, len(r.Header))
+		for k, v := range r.Header {
+			md.IncomingMD[strings.ToLower(k)] = v
+		}
 		recorder := httpx.NewRecorder(w, r)
 		r.Body = &recorder.RequestRecorder
 		s.HttpHandler.ServeHTTP(&recorder.ResponseRecorder, r)

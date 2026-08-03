@@ -43,40 +43,30 @@ func setupOTelSDK(ctx context.Context) (shutdown func(context.Context) error, er
 
 	newPropagator()
 
-
-	if otel.GetTracerProvider() == nil {
-		var tracerProvider *trace.TracerProvider
-		tracerProvider, err = newTraceProvider()
-		if err != nil {
-			handleErr(err)
-			return
-		}
-		shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
+	// 注意：otel.GetTracerProvider()/GetMeterProvider() 永远不返回 nil（无配置时返回 noop 实现），
+	// 不能用 nil 判断是否已初始化；此处以 Otel.Enabled 为准，启用时由 mix 接管 pipeline
+	tracerProvider, err := newTraceProvider()
+	if err != nil {
+		handleErr(err)
+		return
 	}
+	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
 
-	if otel.GetMeterProvider() == nil {
-		var meterProvider *metric.MeterProvider
-		meterProvider, err = newMeterProvider()
-		if err != nil {
-			handleErr(err)
-			return
-		}
-		shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
+	meterProvider, err := newMeterProvider()
+	if err != nil {
+		handleErr(err)
+		return
+	}
+	shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
 
-	}
-	if len(shutdownFuncs) == 0 {
-		shutdown = nil
-	}
 	return
 }
 
 func newPropagator() {
-	if otel.GetTextMapPropagator() == nil {
-		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		))
-	}
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
 }
 
 func newTraceProvider() (*trace.TracerProvider, error) {
