@@ -71,8 +71,6 @@ func TestBind2(t *testing.T) {
 }
 
 func TestBindFormContentType_StillBindsURIQueryHeader(t *testing.T) {
-	// RequestSource.Body 对 form/multipart 返回 nil body（暂不读表单体），
-	// 但仍应继续绑定 uri/query/header。
 	type FormUser struct {
 		ID    int    `uri:"id"`
 		Name  string `form:"name"`
@@ -90,7 +88,7 @@ func TestBindFormContentType_StillBindsURIQueryHeader(t *testing.T) {
 	err = Bind(req, &u)
 	require.NoError(t, err)
 	assert.Equal(t, 9, u.ID)
-	assert.Equal(t, "", u.Name) // form body 当前未接入
+	assert.Equal(t, "formname", u.Name)
 	assert.Equal(t, 21, u.Age)
 	assert.Equal(t, "888", u.Phone)
 }
@@ -109,4 +107,29 @@ func TestBindFromURIQueryHeaderWithoutBody(t *testing.T) {
 	assert.Equal(t, 16, u.Age)
 	assert.Equal(t, "123", u.Phone)
 	assert.Equal(t, "", u.Name)
+}
+
+func TestHeaderSource_URLUnescapeViaGETBind(t *testing.T) {
+	type HeaderUser struct {
+		Token string `header:"x-token"`
+		Tag   string `header:"x-tag"`
+	}
+	req, err := http.NewRequest(http.MethodGet, "http://localhost/ping", nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Token", "hello%20world")
+	req.Header.Set("X-Tag", "a%2Bb")
+
+	var u HeaderUser
+	err = Bind(req, &u)
+	require.NoError(t, err)
+	assert.Equal(t, "hello world", u.Token)
+	assert.Equal(t, "a+b", u.Tag)
+}
+
+func TestHeaderSource_GetDirectly(t *testing.T) {
+	hs := HeaderSource{"X-Token": {"foo%20bar"}}
+	vals, ok := hs.Get("x-token")
+	require.True(t, ok)
+	require.Len(t, vals, 1)
+	assert.Equal(t, "foo bar", vals[0])
 }

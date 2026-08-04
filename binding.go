@@ -279,9 +279,7 @@ func (s RequestSource) Body() (context.Context, string, io.ReadCloser) {
 		return s.Context(), "", nil
 	}
 	contentType := s.Request.Header.Get(httpx.HeaderContentType)
-	if strings.HasPrefix(contentType, httpx.ContentTypeMultipart) || strings.HasPrefix(contentType, httpx.ContentTypeForm) {
-		return s.Context(), contentType, nil
-	}
+	// form/multipart 也需返回 Body，由 CommonBind 按 Content-Type 解析。
 	return s.Context(), contentType, s.Request.Body
 }
 

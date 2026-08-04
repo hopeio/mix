@@ -27,6 +27,43 @@ func TestErrCode_StringAndHelpers(t *testing.T) {
 	}
 }
 
+func TestRegisterErrCodeMap(t *testing.T) {
+	RegisterErrCodeMap(map[int32]string{
+		2001: "FromMap",
+		2002: "AlsoMap",
+	})
+	if ErrCode(2001).String() != "FromMap" {
+		t.Fatalf("2001 String=%q", ErrCode(2001).String())
+	}
+	if ErrCode(2002).String() != "AlsoMap" {
+		t.Fatalf("2002 String=%q", ErrCode(2002).String())
+	}
+}
+
+func TestErrCode_Error(t *testing.T) {
+	if NotFound.Error() != "NotFound" {
+		t.Fatalf("Error()=%q", NotFound.Error())
+	}
+	if ErrCode(9999).Error() != "Unknown Error, Code:9999" {
+		t.Fatalf("unknown Error()=%q", ErrCode(9999).Error())
+	}
+}
+
+func TestErrCode_GRPCStatus(t *testing.T) {
+	st := InvalidArgument.GRPCStatus()
+	if st.Code().String() != "InvalidArgument" {
+		t.Fatalf("grpc code=%v", st.Code())
+	}
+	if st.Message() != "InvalidArgument" {
+		t.Fatalf("grpc message=%q", st.Message())
+	}
+	custom := ErrCode(1001)
+	st2 := custom.GRPCStatus()
+	if int(st2.Code()) != 1001 {
+		t.Fatalf("custom grpc code=%d", st2.Code())
+	}
+}
+
 func TestErrRespFrom(t *testing.T) {
 	if ErrRespFrom(nil) != nil {
 		t.Fatal("nil err -> nil")
