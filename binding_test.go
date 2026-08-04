@@ -70,6 +70,31 @@ func TestBind2(t *testing.T) {
 	assert.Equal(t, "test2", u2.Name)
 }
 
+func TestBindFormContentType_StillBindsURIQueryHeader(t *testing.T) {
+	// RequestSource.Body 对 form/multipart 返回 nil body（暂不读表单体），
+	// 但仍应继续绑定 uri/query/header。
+	type FormUser struct {
+		ID    int    `uri:"id"`
+		Name  string `form:"name"`
+		Age   int    `header:"age"`
+		Phone string `query:"phone"`
+	}
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/user/9?phone=888", bytes.NewBufferString("name=formname"))
+	require.NoError(t, err)
+	req.Pattern = "/user/{id}"
+	req.SetPathValue("id", "9")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Age", "21")
+
+	var u FormUser
+	err = Bind(req, &u)
+	require.NoError(t, err)
+	assert.Equal(t, 9, u.ID)
+	assert.Equal(t, "", u.Name) // form body 当前未接入
+	assert.Equal(t, 21, u.Age)
+	assert.Equal(t, "888", u.Phone)
+}
+
 func TestBindFromURIQueryHeaderWithoutBody(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "http://localhost/user/1?phone=123", nil)
 	require.NoError(t, err)
