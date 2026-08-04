@@ -47,6 +47,13 @@ func (m *Metadata) Set(key, value any) {
 	}
 	m.DataM[key] = value
 }
+
+func (m *Metadata) SetData(value any) {
+	m.Lock()
+	defer m.Unlock()
+	m.Data = value
+}
+
 func (m *Metadata) Del(key any) {
 	m.Lock()
 	defer m.Unlock()
@@ -63,6 +70,12 @@ func (m *Metadata) Get(key any) any {
 		return nil
 	}
 	return m.DataM[key]
+}
+
+func (m *Metadata) GetData() any {
+	m.RLock()
+	defer m.RUnlock()
+	return m.Data
 }
 
 type metadataKey struct{}

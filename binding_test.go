@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type User struct {
@@ -17,35 +17,21 @@ type User struct {
 }
 
 func TestBind(t *testing.T) {
-	done := make(chan struct{}, 1)
-	http.HandleFunc("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var u User
-		err := Bind(r, &u)
-		if err != nil {
-			t.Error(err)
-		}
-		t.Log(u)
-		assert.Equal(t, 1, u.ID)
-		assert.Equal(t, "test", u.Name)
-		done <- struct{}{}
-	})
-	go func() {
-		if err := http.ListenAndServe(":8080", nil); err != nil {
-			t.Fatal(err)
-		}
-	}()
-	time.Sleep(time.Second)
-	req, err := http.NewRequest("POST", "http://localhost:8080/user/1?phone=123", bytes.NewBufferString(`{"name":"test"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/user/1?phone=123", bytes.NewBufferString(`{"name":"test"}`))
+	require.NoError(t, err)
+	req.Pattern = "/user/{id}"
+	req.SetPathValue("id", "1")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Age", "16")
-	_, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	<-done
+
+	var u User
+	err = Bind(req, &u)
+	require.NoError(t, err)
+	// JSON body 分支会直接返回，不会继续绑定 uri/query/header。
+	assert.Equal(t, 0, u.ID)
+	assert.Equal(t, "test", u.Name)
+	assert.Equal(t, 0, u.Age)
+	assert.Equal(t, "", u.Phone)
 }
 
 type User2 struct {
@@ -57,46 +43,45 @@ type User2 struct {
 }
 
 func TestBind2(t *testing.T) {
-
-	http.HandleFunc("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var u User2
-		err := Bind(r, &u)
-		if err != nil {
-			t.Error(err)
-		}
-		t.Log(u)
-		if u.ID == 1 {
-			assert.Equal(t, "test", u.Name)
-		}
-		if u.ID == 2 {
-			assert.Equal(t, "test2", u.Name)
-		}
-
-	})
-	go func() {
-		if err := http.ListenAndServe(":8080", nil); err != nil {
-			t.Fatal(err)
-		}
-	}()
-	time.Sleep(time.Second)
-	req, err := http.NewRequest("POST", "http://localhost:8080/user/1?phone=123", bytes.NewBufferString(`{"name":"test","user":{"id":1}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/user/1?phone=123", bytes.NewBufferString(`{"name":"test","user":{"id":1}}`))
+	require.NoError(t, err)
+	req.Pattern = "/user/{id}"
+	req.SetPathValue("id", "1")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Age", "16")
-	_, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req, err = http.NewRequest("POST", "http://localhost:8080/user/2?phone=007", bytes.NewBufferString(`{"name":"test2"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	var u1 User2
+	err = Bind(req, &u1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, u1.ID)
+	assert.Equal(t, "test", u1.Name)
+
+	req, err = http.NewRequest(http.MethodPost, "http://localhost/user/2?phone=007", bytes.NewBufferString(`{"name":"test2"}`))
+	require.NoError(t, err)
+	req.Pattern = "/user/{id}"
+	req.SetPathValue("id", "2")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Age", "18")
-	_, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	var u2 User2
+	err = Bind(req, &u2)
+	require.NoError(t, err)
+	assert.Equal(t, 0, u2.ID)
+	assert.Equal(t, "test2", u2.Name)
+}
+
+func TestBindFromURIQueryHeaderWithoutBody(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "http://localhost/user/1?phone=123", nil)
+	require.NoError(t, err)
+	req.Pattern = "/user/{id}"
+	req.SetPathValue("id", "1")
+	req.Header.Set("Age", "16")
+
+	var u User
+	err = Bind(req, &u)
+	require.NoError(t, err)
+	assert.Equal(t, 1, u.ID)
+	assert.Equal(t, 16, u.Age)
+	assert.Equal(t, "123", u.Phone)
+	assert.Equal(t, "", u.Name)
 }

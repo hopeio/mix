@@ -64,7 +64,7 @@ func StatusFromErrCode(code ErrCode) int {
 // CommonResp 主要用来接收返回，发送请使用 CommonAnyResp
 type CommonResp[T any] struct {
 	Code ErrCode `json:"code"`
-	Msg  string          `json:"msg,omitempty"`
+	Msg  string  `json:"msg,omitempty"`
 	//验证码
 	Data T `json:"data,omitempty"`
 }
@@ -110,7 +110,7 @@ func (res *CommonResp[T]) Respond(ctx context.Context, w http.ResponseWriter) (i
 	return w.Write(data)
 }
 
-type CommonProtoResp[T proto.Message]  CommonResp[T]
+type CommonProtoResp[T proto.Message] CommonResp[T]
 
 func NewCommonProtoResp[T proto.Message](code ErrCode, msg string, data T) *CommonProtoResp[T] {
 	return &CommonProtoResp[T]{Code: code, Msg: msg, Data: data}
@@ -191,7 +191,6 @@ func (r *CommonProtoResp[T]) UnmarshalProto(data []byte) error {
 
 	return nil
 }
-
 
 type CommonAnyResp = CommonResp[any]
 
@@ -369,7 +368,6 @@ func (x *ErrResp) Error() string {
 func (x *ErrResp) MarshalJSON() ([]byte, error) {
 	return stringsx.ToBytes(`{"code":` + strconv.Itoa(int(x.Code)) + `,"msg":` + strconv.Quote(x.Msg) + `}`), nil
 }
-
 
 type ResponseStream struct {
 	Status  int                          `json:"status,omitempty"`
