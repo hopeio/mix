@@ -8,7 +8,6 @@ package mix
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -56,7 +55,7 @@ func DefaultAccessLog(ctx context.Context, param *AccessLogParam) {
 			param.RequestRecorder.Raw = param.RequestRecorder.Body.Bytes()
 		}
 		if strings.HasSuffix(param.RequestRecorder.ContentType, ContentTypeJson) {
-			reqBodyField = zap.Reflect("body", json.RawMessage(param.RequestRecorder.Raw))
+			reqBodyField = log.RawJson("body", param.RequestRecorder.Raw)
 		} else if strings.HasSuffix(param.RequestRecorder.ContentType, ContentTypeProtobuf) {
 			reqBodyField = zap.String("body", safeStringer(param.RequestRecorder.Value))
 		} else {
@@ -69,7 +68,7 @@ func DefaultAccessLog(ctx context.Context, param *AccessLogParam) {
 			param.ResponseRecorder.Raw = param.ResponseRecorder.Body.Bytes()
 		}
 		if strings.HasSuffix(param.ResponseRecorder.ContentType, ContentTypeJson) {
-			respBodyField = zap.Reflect("response", json.RawMessage(param.ResponseRecorder.Raw))
+			respBodyField = log.RawJson("response", param.ResponseRecorder.Raw)
 		} else if strings.HasSuffix(param.ResponseRecorder.ContentType, ContentTypeProtobuf) {
 			respBodyField = zap.String("response", safeStringer(param.ResponseRecorder.Value))
 		} else {

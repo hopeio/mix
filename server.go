@@ -80,8 +80,6 @@ func (s *Server) Run() {
 	}
 
 	onePort := s.Grpc.Addr == "" || s.Grpc.Addr == s.Addr
-	// HTTP 中间件只包 HTTP 路径；gRPC ServeHTTP 需要原始 Flusher/Hijacker，不能被 wrapper 剥掉。
-	httpHandler = httpx.UseMiddleware(httpHandler, s.Middlewares...)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		md := Metadata{
 			Request:        r,

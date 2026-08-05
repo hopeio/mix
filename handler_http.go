@@ -88,5 +88,5 @@ func (s *Server) httpHandler() http.Handler {
 			return r.RequestURI
 		})}, s.Otel.OtelhttpOpts...)...)
 	}
-	return handler
+	return httpx.UseMiddleware(handler, s.Middlewares...)
 }
