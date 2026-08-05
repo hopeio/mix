@@ -18,7 +18,7 @@ require (
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gofiber/fiber/v3 v3.4.0
-	github.com/hopeio/gox v1.11.8
+	github.com/hopeio/gox v1.12.0
 	github.com/quic-go/quic-go v0.61.0
 	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.11.1

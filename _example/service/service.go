@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	pb "github.com/hopeio/mix/_example/proto"
-	"github.com/hopeio/gox/errors"
+	"github.com/hopeio/mix"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -23,10 +23,10 @@ type UserService struct {
 func (u *UserService) Signup(ctx context.Context, req *pb.SignupReq) (*wrapperspb.StringValue, error) {
 
 	if req.Mail == "" && req.Phone == "" {
-		return nil, errors.InvalidArgument.Msg("请填写邮箱或手机号")
+		return nil, mix.InvalidArgument.Msg("please fill in the email or phone number")
 	}
 
-	return &wrapperspb.StringValue{Value: "注册成功"}, nil
+	return &wrapperspb.StringValue{Value: "success"}, nil
 }
 
 func (u *UserService) GetUser(ctx context.Context, req *pb.GetUserReq) (*pb.User, error) {
