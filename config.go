@@ -81,7 +81,10 @@ type CorsConfig struct {
 }
 
 type OtelConfig struct {
-	Enabled      bool
+	Enabled bool
+	// SkipSDK skips mix's internal TracerProvider setup when the app already
+	// called an external SetupOTelSDK (e.g. scaffold/otel with OTLP export).
+	SkipSDK      bool
 	OtelhttpOpts []otelhttp.Option
 	OtelgrpcOpts []otelgrpc.Option
 }

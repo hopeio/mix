@@ -48,7 +48,9 @@ func (s *Server) grpcHandler() *grpc.Server {
 			s.Grpc.Options = append(s.Grpc.Options, grpc.StatsHandler(
 				otelgrpc.NewServerHandler(append([]otelgrpc.Option{
 					otelgrpc.WithPropagators(propagation.NewCompositeTextMapPropagator(
-						opentelemetry.GRPCTraceBinPropagator{}, propagation.Baggage{},
+						propagation.TraceContext{},
+						opentelemetry.GRPCTraceBinPropagator{},
+						propagation.Baggage{},
 					))}, s.Otel.OtelgrpcOpts...)...)))
 		}
 		stream = append(stream, s.StreamAccess)

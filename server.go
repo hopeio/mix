@@ -58,7 +58,7 @@ func (s *Server) Run() {
 		httpHandler = cors.New(s.Cors.Options).Handler(httpHandler)
 	}
 
-	// Set up OpenTelemetry.
+	// Set up OpenTelemetry instrumentation (HTTP/gRPC wrappers).
 	if s.Otel.Enabled {
 		http.DefaultClient = &http.Client{
 			Transport: otelhttp.NewTransport(
@@ -68,12 +68,14 @@ func (s *Server) Run() {
 				}),
 			),
 		}
-		shutdownFunc, err := setupOTelSDK(sigCtx)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if shutdownFunc != nil {
-			defer shutdownFunc(sigCtx)
+		if !s.Otel.SkipSDK {
+			shutdownFunc, err := setupOTelSDK(sigCtx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if shutdownFunc != nil {
+				defer shutdownFunc(sigCtx)
+			}
 		}
 		s.tracer = otel.Tracer(ScopeName)
 		s.meter = otel.Meter(ScopeName)

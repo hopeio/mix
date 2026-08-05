@@ -83,10 +83,11 @@ func (s *Server) httpHandler() http.Handler {
 		}
 		recorder.Reset()
 	})
+	handler = httpx.UseMiddleware(handler, s.Middlewares...)
 	if s.Otel.Enabled {
 		return otelhttp.NewHandler(handler, "http", append([]otelhttp.Option{otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
 			return r.RequestURI
 		})}, s.Otel.OtelhttpOpts...)...)
 	}
-	return httpx.UseMiddleware(handler, s.Middlewares...)
+	return handler
 }
