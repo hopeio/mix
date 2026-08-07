@@ -11,6 +11,14 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
 
+// Captured before tests mutate globals; otel's unset default is *global.tracerProvider.
+var defaultTracerAtInit = otel.GetTracerProvider()
+
+func TestDefaultGlobalIsDelegate(t *testing.T) {
+	assert.True(t, isOTelGlobalDelegateTracer(defaultTracerAtInit),
+		"unset GetTracerProvider should be *global.tracerProvider, got %T", defaultTracerAtInit)
+}
+
 func TestResolveOTelProtocol(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "")
 	assert.Equal(t, otelProtocolHTTP, resolveOTelProtocol(""))
@@ -36,17 +44,25 @@ func TestStripURLScheme(t *testing.T) {
 	assert.Equal(t, "localhost:4317", stripURLScheme("localhost:4317"))
 }
 
+func TestIsOTelGlobalDelegateTracer(t *testing.T) {
+	assert.False(t, isOTelGlobalDelegateTracer(nil))
+	assert.False(t, isOTelGlobalDelegateTracer(tracenoop.NewTracerProvider()))
+	assert.False(t, isOTelGlobalDelegateTracer(sdktrace.NewTracerProvider()))
+}
+
 func TestTracerProviderAlreadySet(t *testing.T) {
 	prev := otel.GetTracerProvider()
 	t.Cleanup(func() { otel.SetTracerProvider(prev) })
 
+	// Explicit Set (even noop) means "already configured" — do not let mix overwrite.
 	otel.SetTracerProvider(tracenoop.NewTracerProvider())
-	assert.False(t, tracerProviderAlreadySet())
+	assert.True(t, tracerProviderAlreadySet())
 
 	tp := sdktrace.NewTracerProvider()
 	t.Cleanup(func() { _ = tp.Shutdown(t.Context()) })
 	otel.SetTracerProvider(tp)
 	assert.True(t, tracerProviderAlreadySet())
+	assert.False(t, isOTelGlobalDelegateTracer(otel.GetTracerProvider()))
 }
 
 func TestSetupOTelSDKSkipWhenProviderSet(t *testing.T) {

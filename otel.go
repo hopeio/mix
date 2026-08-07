@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
-	tracenoop "go.opentelemetry.io/otel/trace/noop"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const ScopeName = "github.com/hopeio/mix"
@@ -130,9 +131,26 @@ func setupOTelSDK(ctx context.Context, cfg *OtelConfig) (shutdown func(context.C
 	return
 }
 
+// tracerProviderAlreadySet reports whether the app (or another library) has
+// replaced otel's default global TracerProvider.
+//
+// The unset default is NOT trace/noop.TracerProvider; it is the unexported
+// *global.tracerProvider proxy from go.opentelemetry.io/otel/internal/global.
+// Asserting noop therefore always fails and would incorrectly skip mix SDK.
 func tracerProviderAlreadySet() bool {
-	_, isNoop := otel.GetTracerProvider().(tracenoop.TracerProvider)
-	return !isNoop
+	return !isOTelGlobalDelegateTracer(otel.GetTracerProvider())
+}
+
+func isOTelGlobalDelegateTracer(tp trace.TracerProvider) bool {
+	if tp == nil {
+		return false
+	}
+	t := reflect.TypeOf(tp)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	// Match otel's internal/global.tracerProvider without importing internal/.
+	return t.PkgPath() == "go.opentelemetry.io/otel/internal/global" && t.Name() == "tracerProvider"
 }
 
 func installPropagator() {
