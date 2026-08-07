@@ -82,11 +82,6 @@ type CorsConfig struct {
 
 type OtelConfig struct {
 	Enabled bool
-	// SkipSDK forces mix not to install providers (app already did).
-	// When false, mix also auto-skips if the global tracer/meter is already non-noop.
-	SkipSDK bool
-	// ForceSDK installs mix SDK even when a non-noop provider exists (overwrites globals).
-	ForceSDK bool
 
 	// ServiceName sets resource service.name; empty → OTEL_SERVICE_NAME or "mix".
 	ServiceName string

@@ -43,16 +43,13 @@ const (
 )
 
 // setupOTelSDK bootstraps OTLP traces/metrics/logs when Enabled and no prior SDK.
-// Returns a no-op shutdown when skipped (SkipSDK or non-noop tracer already set).
+// Returns a no-op shutdown when a non-noop global tracer is already set (app/scaffold owned).
 func setupOTelSDK(ctx context.Context, cfg *OtelConfig) (shutdown func(context.Context) error, err error) {
 	noop := func(context.Context) error { return nil }
 	if cfg == nil {
 		return noop, nil
 	}
-	if cfg.SkipSDK && !cfg.ForceSDK {
-		return noop, nil
-	}
-	if !cfg.ForceSDK && tracerProviderAlreadySet() {
+	if tracerProviderAlreadySet() {
 		log.Info("otel: skip mix SDK (global tracer provider already set)")
 		return noop, nil
 	}
