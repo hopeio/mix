@@ -29,8 +29,8 @@ func (s *Server) InternalHandler(mux *http.ServeMux) {
 	if s.Openapi.Enabled {
 		openapi.Openapi(mux, s.Openapi.UriPrefix, s.Openapi.Dir)
 	}
-	if s.DebugHandler.Enabled {
-		httpx.HandleDebug(mux, s.DebugHandler.UriPrefix)
+	if s.Debug.Enabled {
+		httpx.HandleDebug(mux, s.Debug.UriPrefix)
 	}
 }
 

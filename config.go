@@ -50,14 +50,14 @@ type Server struct {
 	Otel           OtelConfig
 	tracer         trace.Tracer
 	meter          metric.Meter
-	DebugHandler   DebugHandlerConfig
+	Debug          DebugConfig
 	BaseContext    context.Context
 	Middlewares    []httpx.Middleware
 	HttpHandler    http.Handler
 	GrpcHandler    func(*grpc.Server)
 }
 
-type DebugHandlerConfig struct {
+type DebugConfig struct {
 	Enabled   bool
 	UriPrefix string
 }
@@ -82,9 +82,44 @@ type CorsConfig struct {
 
 type OtelConfig struct {
 	Enabled bool
-	// SkipSDK skips mix's internal TracerProvider setup when the app already
-	// called an external SetupOTelSDK (e.g. scaffold/otel with OTLP export).
-	SkipSDK      bool
+	// SkipSDK forces mix not to install providers (app already did).
+	// When false, mix also auto-skips if the global tracer/meter is already non-noop.
+	SkipSDK bool
+	// ForceSDK installs mix SDK even when a non-noop provider exists (overwrites globals).
+	ForceSDK bool
+
+	// ServiceName sets resource service.name; empty → OTEL_SERVICE_NAME or "mix".
+	ServiceName string
+	// ServiceVersion sets resource service.version; empty → OTEL_SERVICE_VERSION.
+	ServiceVersion string
+	// ResourceAttributes merges into the resource (in addition to env detectors).
+	ResourceAttributes map[string]string
+
+	// Protocol selects OTLP transport: "http" (default) or "grpc".
+	// Empty → OTEL_EXPORTER_OTLP_PROTOCOL (http/protobuf|http → http, grpc → grpc).
+	Protocol string
+	// Endpoint is host:port or URL. Empty → OTEL_EXPORTER_OTLP_ENDPOINT (exporter default).
+	Endpoint string
+	// Insecure uses plaintext to the collector (typical for local/dev).
+	Insecure bool
+	// Headers are sent on OTLP export (merged with OTEL_EXPORTER_OTLP_HEADERS when empty).
+	Headers map[string]string
+	// URLPath overrides OTLP HTTP path (traces/metrics/logs use signal defaults if empty).
+	TracesURLPath  string
+	MetricsURLPath string
+	LogsURLPath    string
+
+	// SampleRatio is root/local sampling in [0,1]; 0 with no env → 1 (always).
+	SampleRatio float64
+	// MetricInterval for periodic metric export; 0 → 10s.
+	MetricInterval time.Duration
+
+	DisableTraces  bool
+	DisableMetrics bool
+	DisableLogs    bool
+	// DisableRuntimeMetrics skips go.opentelemetry.io/contrib/instrumentation/runtime.
+	DisableRuntimeMetrics bool
+
 	OtelhttpOpts []otelhttp.Option
 	OtelgrpcOpts []otelgrpc.Option
 }

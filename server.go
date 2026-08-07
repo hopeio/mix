@@ -68,14 +68,12 @@ func (s *Server) Run() {
 				}),
 			),
 		}
-		if !s.Otel.SkipSDK {
-			shutdownFunc, err := setupOTelSDK(sigCtx)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if shutdownFunc != nil {
-				defer shutdownFunc(sigCtx)
-			}
+		shutdownFunc, err := setupOTelSDK(sigCtx, &s.Otel)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if shutdownFunc != nil {
+			defer shutdownFunc(sigCtx)
 		}
 		s.tracer = otel.Tracer(ScopeName)
 		s.meter = otel.Meter(ScopeName)
@@ -157,16 +155,14 @@ func (s *Server) Run() {
 		}
 	}()
 
-	// 内部端口使用私有 mux，避免污染全局 http.DefaultServeMux
-	internalMux := http.NewServeMux()
-	s.InternalHandler(internalMux)
+	s.InternalHandler(http.DefaultServeMux)
 	if s.InternalServer.BaseContext == nil {
 		s.InternalServer.BaseContext = func(_ net.Listener) context.Context {
 			return sigCtx
 		}
 	}
 	if s.InternalServer.Handler == nil {
-		s.InternalServer.Handler = internalMux
+		s.InternalServer.Handler = http.DefaultServeMux
 	}
 	go func() {
 		log.Infof("internal listening: %s", s.InternalServer.Addr)
