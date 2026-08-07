@@ -70,6 +70,15 @@ func TestSetupOTelSDKSkipWhenProviderSet(t *testing.T) {
 	assert.Same(t, tp, otel.GetTracerProvider())
 }
 
+func TestPyroscopeResolve(t *testing.T) {
+	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
+	t.Setenv("PYROSCOPE_APPLICATION_NAME", "")
+	c := PyroscopeConfig{}.resolve("my-svc")
+	assert.True(t, c.Enabled)
+	assert.Equal(t, "http://127.0.0.1:4040", c.ServerAddress)
+	assert.Equal(t, "my-svc", c.ApplicationName)
+}
+
 func TestSampleRatioDefault(t *testing.T) {
 	_ = os.Unsetenv("OTEL_TRACES_SAMPLER_ARG")
 	assert.Equal(t, 1.0, sampleRatio(&OtelConfig{}))

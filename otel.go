@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	otelpyroscope "github.com/grafana/otel-profiling-go"
 	"github.com/hopeio/gox/log"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
@@ -59,7 +60,10 @@ func setupOTelSDK(ctx context.Context, cfg *OtelConfig) (shutdown func(context.C
 	wantTraces := !cfg.DisableTraces
 	wantMetrics := !cfg.DisableMetrics
 	wantLogs := !cfg.DisableLogs
-	if !wantTraces && !wantMetrics && !wantLogs {
+	// Resolve pyroscope early (needs service name hint; full name after resource).
+	pyroHint := cfg.Pyroscope.resolve(strings.TrimSpace(cfg.ServiceName))
+	wantPyroscope := pyroHint.Enabled
+	if !wantTraces && !wantMetrics && !wantLogs && !wantPyroscope {
 		return noop, nil
 	}
 
@@ -86,14 +90,26 @@ func setupOTelSDK(ctx context.Context, cfg *OtelConfig) (shutdown func(context.C
 
 	proto := resolveOTelProtocol(cfg.Protocol)
 	headers := resolveOTelHeaders(cfg.Headers)
+	pyroCfg := cfg.Pyroscope.resolve(serviceNameFromResource(res))
 
 	if wantTraces {
-		tp, e := newTraceProvider(ctx, res, cfg, proto, headers)
+		tp, stopProf, e := newTraceProvider(ctx, res, cfg, proto, headers, pyroCfg)
 		if e != nil {
 			handleErr(e)
 			return
 		}
 		shutdownFuncs = append(shutdownFuncs, tp.Shutdown)
+		if stopProf != nil {
+			shutdownFuncs = append(shutdownFuncs, stopProf)
+		}
+	} else if pyroCfg.Enabled {
+		profiler, e := startPyroscope(pyroCfg)
+		if e != nil {
+			handleErr(e)
+			return
+		}
+		shutdownFuncs = append(shutdownFuncs, func(context.Context) error { return profiler.Stop() })
+		log.Infof("otel: pyroscope profiling → %s app=%s (traces disabled)", pyroCfg.ServerAddress, pyroCfg.ApplicationName)
 	}
 	if wantMetrics {
 		mp, e := newMeterProvider(ctx, res, cfg, proto, headers)
@@ -112,8 +128,8 @@ func setupOTelSDK(ctx context.Context, cfg *OtelConfig) (shutdown func(context.C
 		shutdownFuncs = append(shutdownFuncs, lp.Shutdown)
 	}
 
-	log.Infof("otel: mix SDK ready protocol=%s endpoint=%q traces=%v metrics=%v logs=%v",
-		proto, cfg.Endpoint, wantTraces, wantMetrics, wantLogs)
+	log.Infof("otel: mix SDK ready protocol=%s endpoint=%q traces=%v metrics=%v logs=%v pyroscope=%v",
+		proto, cfg.Endpoint, wantTraces, wantMetrics, wantLogs, pyroCfg.Enabled)
 	return
 }
 
@@ -248,7 +264,7 @@ func metricInterval(cfg *OtelConfig) time.Duration {
 	return 10 * time.Second
 }
 
-func newTraceProvider(ctx context.Context, res *resource.Resource, cfg *OtelConfig, proto string, headers map[string]string) (*sdktrace.TracerProvider, error) {
+func newTraceProvider(ctx context.Context, res *resource.Resource, cfg *OtelConfig, proto string, headers map[string]string, pyroCfg PyroscopeConfig) (*sdktrace.TracerProvider, func(context.Context) error, error) {
 	var exporter sdktrace.SpanExporter
 	var err error
 	switch proto {
@@ -279,15 +295,25 @@ func newTraceProvider(ctx context.Context, res *resource.Resource, cfg *OtelConf
 		exporter, err = otlptracehttp.New(ctx, opts...)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithSampler(traceSampler(cfg)),
 	)
-	otel.SetTracerProvider(tp)
-	return tp, nil
+	if !pyroCfg.Enabled {
+		otel.SetTracerProvider(tp)
+		return tp, nil, nil
+	}
+	otel.SetTracerProvider(otelpyroscope.NewTracerProvider(tp))
+	profiler, err := startPyroscope(pyroCfg)
+	if err != nil {
+		_ = tp.Shutdown(ctx)
+		return nil, nil, err
+	}
+	log.Infof("otel: pyroscope profiling → %s app=%s", pyroCfg.ServerAddress, pyroCfg.ApplicationName)
+	return tp, func(context.Context) error { return profiler.Stop() }, nil
 }
 
 func newMeterProvider(ctx context.Context, res *resource.Resource, cfg *OtelConfig, proto string, headers map[string]string) (*sdkmetric.MeterProvider, error) {

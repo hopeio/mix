@@ -120,8 +120,26 @@ type OtelConfig struct {
 	// DisableRuntimeMetrics skips go.opentelemetry.io/contrib/instrumentation/runtime.
 	DisableRuntimeMetrics bool
 
+	// Pyroscope enables continuous profiling (pyroscope-go) and span labels (otel-profiling-go).
+	// Also activated when ServerAddress or PYROSCOPE_SERVER_ADDRESS is set.
+	Pyroscope PyroscopeConfig
+
 	OtelhttpOpts []otelhttp.Option
 	OtelgrpcOpts []otelgrpc.Option
+}
+
+// PyroscopeConfig configures grafana/pyroscope-go push client.
+type PyroscopeConfig struct {
+	Enabled             bool
+	ServerAddress       string
+	ApplicationName     string
+	BasicAuthUser       string
+	BasicAuthPassword   string
+	AuthToken           string
+	DisableMutexProfile bool
+	DisableBlockProfile bool
+	// Log enables pyroscope.StandardLogger (or set PYROSCOPE_LOG=1).
+	Log bool
 }
 
 func (c *OtelConfig) SetOtelhttpOptions(otelhttpOpts []otelhttp.Option) {

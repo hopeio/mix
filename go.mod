@@ -18,6 +18,8 @@ require (
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gofiber/fiber/v3 v3.4.0
+	github.com/grafana/otel-profiling-go v0.6.0
+	github.com/grafana/pyroscope-go v1.4.1
 	github.com/hopeio/gox v1.12.0
 	github.com/quic-go/quic-go v0.61.0
 	github.com/rs/cors v1.11.1
@@ -67,6 +69,7 @@ require (
 	github.com/gofiber/utils/v2 v2.4.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.20 // indirect
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.11 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
