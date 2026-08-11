@@ -1,49 +1,54 @@
 # mix
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/hopeio/mix.svg)](https://pkg.go.dev/github.com/hopeio/mix)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**mix** 是一个开箱即用的 Go 微服务运行时：在同一进程中同时暴露 **HTTP** 与 **gRPC**，并内置可观测性、访问日志与优雅关停。
+**One process. HTTP and gRPC. Same port.**  
+开箱即用的 Go 微服务运行时：HTTP/1.1 · 明文 HTTP/2（gRPC）· 可选 HTTP/3，内置访问日志、统一错误码、请求绑定、OpenTelemetry 与优雅关停。
 
-适合与 [hopeio/protobuf](https://github.com/hopeio/protobuf) 工具链配合，快速搭建基于 Protobuf 的云原生服务。
+适合与 [hopeio/protobuf](https://github.com/hopeio/protobuf) 工具链一起，用一份 Protobuf 契约快速长出云原生服务。
 
 ![server](_assets/server.webp)
 
+```bash
+go get github.com/hopeio/mix@latest
+```
+
+## 为什么是 mix
+
+多数项目要么「Gin 一套 + 另起 gRPC 端口」，要么上沉重的服务网格才谈多协议。  
+**mix** 把双栈收进同一监听地址：按 `Content-Type` 把流量分给 `http.Handler` 或 `grpc.Server`——本地开发与 K8s Service 都更简单。
+
 ## 特性
 
-- **同端口多协议** — HTTP/1.1、明文 HTTP/2（gRPC）共用主监听地址；按 `Content-Type` 自动分发到 gRPC 或 HTTP 处理器
-- **HTTP/3** — 基于 [quic-go](https://github.com/quic-go/quic-go) 可选启用
-- **请求上下文** — 通过 `mix.Metadata` 在 HTTP / gRPC 链路中传递 trace、token、logger 等
-- **访问日志** — HTTP 与 gRPC 均可记录请求/响应体，支持路径前缀过滤
-- **OpenTelemetry** — HTTP、gRPC 链路追踪与指标，与 [hopeio/gox](https://github.com/hopeio/gox) 日志字段对齐
-- **内部端口** — 默认 `:8081` 暴露 OpenAPI 文档（Redoc）与 pprof 调试端点
-- **CORS / 中间件 / TLS** — 通过 `Option` 组合配置
-- **优雅关停** — 监听 `SIGINT` / `SIGTERM`，依次停止 gRPC 与 HTTP
+- **同端口多协议** — HTTP/1.1 + h2c gRPC；可选 [quic-go](https://github.com/quic-go/quic-go) HTTP/3
+- **框架无关 HTTP** — 注入任意 `http.Handler`；Gin / Fiber 走 `contrib/`
+- **Gateway** — `mix/gateway` 把 Unary / 流式 RPC 挂成 HTTP（stdlib；另有 gin / fiber）
+- **Binding** — `uri` / `query` / `header` / `form` / `json` 一次绑定并校验
+- **统一错误码** — 对齐 gRPC codes，HTTP / gRPC 同一套 `ErrResp`
+- **访问日志** — HTTP / gRPC 可记 body，支持路径前缀过滤
+- **OpenTelemetry** — 链路与指标，字段风格与 [gox](https://github.com/hopeio/gox) 日志对齐
+- **运维口** — 默认 `:8081`：OpenAPI（Redoc）+ pprof
+- **CORS · 中间件 · TLS · 优雅关停** — `SIGINT` / `SIGTERM` 有序停机
+- **可注入** — 实现 `BeforeInject` / `AfterInject`，与 [initialize](https://github.com/hopeio/initialize) 无缝配合
 
 ## 架构
 
 ```
                     ┌─────────────────────────────────┐
   Client ──────────►│  :8080  主服务（HTTP + gRPC）    │
-                    │  ├─ HTTP  → Gin / ServeMux / …  │
+                    │  ├─ HTTP  → 你的 http.Handler   │
                     │  └─ gRPC  → grpc.Server         │
                     └─────────────────────────────────┘
                     ┌─────────────────────────────────┐
   运维 / 文档 ──────►│  :8081  内部端口                 │
-                    │  ├─ /openapi  Redoc 文档        │
+                    │  ├─ /openapi  Redoc             │
                     │  └─ /debug    pprof             │
                     └─────────────────────────────────┘
 ```
 
-## 快速开始
-
-### 安装
-
-```bash
-go get github.com/hopeio/mix
-```
-
-### 最小示例
+## 最小示例
 
 ```go
 package main
@@ -67,13 +72,13 @@ func main() {
 }
 ```
 
-完整示例见 [`_example/`](_example/)：
+完整示例：
 
 ```bash
 go run ./_example
 ```
 
-`_example` 演示了 gRPC 服务注册，以及通过 [gox/net/http/grpc/gateway](https://github.com/hopeio/gox) 将 RPC 暴露为 HTTP 接口。
+`_example` 演示 gRPC 注册，以及通过 `mix/gateway` 将 RPC 暴露为 HTTP。
 
 ## 配置选项
 
@@ -81,34 +86,26 @@ go run ./_example
 |--------|------|
 | `WithHttpHandler` | 主 HTTP 处理器（必填） |
 | `WithGrpcHandler` | 注册 gRPC 服务 |
-| `WithHttp` | 自定义 `http.Server` 字段（地址、超时等） |
+| `WithHttp` | 自定义 `http.Server`（地址、超时等） |
 | `WithHTTP3` | 启用 HTTP/3 |
-| `WithInternalServer` | 自定义内部端口（OpenAPI / pprof） |
-| `WithCors` | 跨域配置 |
+| `WithInternalServer` | 内部端口（OpenAPI / pprof） |
+| `WithCors` | 跨域 |
 | `WithOtel` | OpenTelemetry |
 | `WithMiddleware` | HTTP 中间件链 |
 | `WithGrpc` | gRPC 拦截器与 `ServerOption` |
 
 ### 请求元数据
 
-在 Handler 中通过 context 获取请求元数据：
-
 ```go
-import "github.com/hopeio/mix"
-
-func handler(ctx context.Context) {
-	md := mix.GetMetadata(ctx)
-	if md != nil {
-		_ = md.TraceId
-		_ = md.Token
-		md.Set("key", "value")
-	}
+md := mix.GetMetadata(ctx)
+if md != nil {
+	_ = md.TraceId
+	_ = md.Token
+	md.Set("key", "value")
 }
 ```
 
-### 与配置注入框架配合
-
-`Server` 实现了 `BeforeInject` / `AfterInject`，可与 [hopeio/initialize](https://github.com/hopeio/initialize) 等 DI 框架集成：
+### 与 initialize 一起用
 
 ```go
 global.Conf.Server.WithOptions(
@@ -117,61 +114,48 @@ global.Conf.Server.WithOptions(
 ).Run()
 ```
 
-## 工具链
+## Protobuf 工具链
 
-mix 本身不负责代码生成，推荐配合 hopeio 系列工具使用：
-
-### 安装 protoc 插件
-
-- 安装 [protoc](https://github.com/protocolbuffers/protobuf/releases)
-- 安装 hopeio 工具集：
+mix 不负责代码生成。推荐：
 
 ```bash
+# 安装 hopeio 插件集
 go run $(go list -m -f {{.Dir}} github.com/hopeio/protobuf)/tools/install_tools.go
-```
 
-### 生成代码
-
-```bash
-protogen go -d -e -w -v -i _example/proto -o _example/protobuf
+# 生成 Go + OpenAPI + Gateway + Validator
+protogen go -d -e -w -v -i ./proto -o ./protobuf
 ```
 
 | 标志 | 含义 |
 |------|------|
-| `-d` | OpenAPI 文档 |
-| `-e` | 枚举扩展 |
-| `-w` | Gin gRPC-Gateway |
-| `-v` | 请求校验代码 |
-| `-g` | GraphQL（可选） |
+| `-d` | OpenAPI |
+| `-w` | HTTP Gateway（`framework=gin\|fiber\|nethttp`） |
+| `-v` | 请求校验 |
+| `-I` / `-p` | include / hopeio `_proto` |
 
-也可使用 Docker：
+Docker：
 
 ```bash
-docker run --rm -v $PWD:/work jybl/protogen \
-  protogen go -d -e -w -i $proto_path -o $proto_output_path
+docker run --rm -v "$PWD:/work" jybl/protogen \
+  protogen go -d -w -v -i /work/proto -o /work/gen
 ```
-
-生成物可对接：
-
-- **Gin Gateway** — `protoc-gen-grpc-gin` 生成的路由
-- **grpc-gateway** — 标准 `google.api.http` 注解
 
 ## 默认端口
 
 | 端口 | 用途 |
 |------|------|
 | `:8080` | 主服务（HTTP + gRPC） |
-| `:8081` | OpenAPI 文档 / pprof |
+| `:8081` | OpenAPI / pprof |
 
-## 相关项目
+## hopeio 生态
 
 | 仓库 | 说明 |
 |------|------|
-| [hopeio/gox](https://github.com/hopeio/gox) | 日志、HTTP 工具、gRPC-Gateway 封装 |
-| [hopeio/protobuf](https://github.com/hopeio/protobuf) | protoc 插件与 `protogen` CLI |
-| [hopeio/scaffold](https://github.com/hopeio/scaffold) | OTel、Prometheus、JWT 等脚手架 |
-| [hopeio/initialize](https://github.com/hopeio/initialize) | 配置加载与服务初始化 |
+| [gox](https://github.com/hopeio/gox) | 日志、HTTP 工具、常量与调度 |
+| [initialize](https://github.com/hopeio/initialize) | 配置与 DAO 注入 |
+| [protobuf](https://github.com/hopeio/protobuf) | `protogen` 与公共 proto |
+| [scaffold](https://github.com/hopeio/scaffold) | OTel / JWT 等业务脚手架（可选） |
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) · Copyright © hopeio
