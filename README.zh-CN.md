@@ -6,45 +6,41 @@
 
 [English](README.md)
 
-**同一进程里的 HTTP 与 gRPC——常常共用一个端口。**
-
-![server](_assets/server.webp)
-
 ```bash
 go get github.com/hopeio/mix@latest
 ```
 
-## mix 是什么？
+**mix** 把 HTTP 和 gRPC 跑在一起。传入 `http.Handler` 与 gRPC 注册函数；默认监听 `:8080`，按 `Content-Type` 分流，信号到达时优雅退出。
 
-**mix** 是轻量的 Go 微服务运行时。你提供 `http.Handler`，可选注册 gRPC 服务；mix 监听（默认 `:8080`），按 `Content-Type` 分发，直到优雅退出。
+## 适用场景
 
-常见样板它直接带好：访问日志、统一错误码、请求绑定、CORS、中间件、OpenTelemetry、可选 HTTP/3，以及用于 OpenAPI（Redoc）/ pprof 的内部端口。
+希望一个二进制、通常一个对外端口同时服务浏览器/REST 与 gRPC，而不是维护两套 Server、两个 Service 端口。绑定、错误响应、访问日志、CORS、中间件、OpenTelemetry、可选 HTTP/3、内部 OpenAPI/pprof 端口等样板，也一并带上。
 
-HTTP 与框架解耦（标准 `net/http`）。Gin / Fiber 适配在 `contrib/`。`gateway/` 可将 Unary 与流式 RPC 挂成 HTTP Handler。
-
-## 特性
-
-- **同端口多路** — HTTP/1.1 + 明文 HTTP/2（gRPC）；可选 HTTP/3（QUIC）
-- **任意 `http.Handler`** — 标准库 mux、Gin、Fiber…
-- **Gateway** — `gateway/` 下的 `UnaryCall` / 流式辅助（另有 `contrib/gin`、`contrib/fiber`）
-- **绑定** — `uri` / `query` / `header` / `form` / `json`，带校验
-- **错误模型** — 与 gRPC codes 对齐；HTTP / gRPC 共用响应辅助
-- **访问日志** — HTTP 与 gRPC，可记 body、可按路径过滤
-- **OpenTelemetry** — 链路与指标挂钩点
-- **内部服务** — 默认 `:8081` 文档与 pprof
-- **生命周期** — `SIGINT` / `SIGTERM` 有序停机；提供注入钩子便于 DI 式装配
-
-## 架构
+## 行为
 
 ```
-  客户端 ──► :8080  主监听
-            ├─ gRPC Content-Type  → grpc.Server
-            └─ 其他               → http.Handler
+入站 :8080
+  ├─ Content-Type 像 gRPC  →  grpc.Server.ServeHTTP
+  └─ 其余                  →  你的 http.Handler
 
-  运维   ──► :8081  内部口（OpenAPI / pprof）
+入站 :8081（可选内部口）
+  └─ OpenAPI（Redoc）/ pprof / metrics
 ```
 
-## 最小示例
+HTTP 基于 `net/http`。要用 Gin / Fiber，看 `contrib/gin`、`contrib/fiber`。把 RPC 挂到 HTTP 用 `gateway`（标准库）或 contrib 封装。
+
+## 功能
+
+- 同监听 HTTP/1.1 + h2c gRPC；可选 QUIC HTTP/3
+- `WithHttpHandler` / `WithGrpcHandler`，以及超时、CORS、OTel、中间件等 Option
+- 请求绑定：path、query、header、form、JSON + 校验
+- 错误码对齐 gRPC status；统一响应辅助函数
+- HTTP / gRPC 访问日志（路径包含/排除）
+- Context 元数据（`TraceId`、token、自定义键）
+- `SIGINT` / `SIGTERM` 优雅停机
+- `BeforeInject` / `AfterInject`，便于放进 DI 启动流程
+
+## 最小服务
 
 ```go
 package main
@@ -59,10 +55,11 @@ import (
 func main() {
 	mix.NewServer(
 		mix.WithHttpHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("hello"))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
 		})),
-		mix.WithGrpcHandler(func(s *grpc.Server) {
-			// pb.RegisterYourServiceServer(s, &impl{})
+		mix.WithGrpcHandler(func(gs *grpc.Server) {
+			// pb.RegisterXxxServer(gs, impl)
 		}),
 	).Run()
 }
@@ -72,36 +69,54 @@ func main() {
 go run ./_example
 ```
 
-## 选项
+## Option 速查
 
 | Option | 作用 |
 |--------|------|
-| `WithHttpHandler` | 主 HTTP 处理器 |
+| `WithHttpHandler` | 对外 HTTP |
 | `WithGrpcHandler` | 注册 gRPC 服务 |
-| `WithHttp` | 调整 `http.Server` |
-| `WithHTTP3` | 启用 HTTP/3 |
-| `WithInternalServer` | 内部监听地址 |
+| `WithHttp` | 修改 `http.Server` |
+| `WithHTTP3` | 开启 HTTP/3 |
+| `WithInternalServer` | 文档 / pprof |
 | `WithCors` | 跨域 |
-| `WithOtel` | OpenTelemetry |
-| `WithMiddleware` | HTTP 中间件链 |
-| `WithGrpc` | gRPC 拦截器 / `ServerOption` |
+| `WithOtel` | 链路 / 指标 |
+| `WithMiddleware` | HTTP 中间件 |
+| `WithGrpc` | 拦截器与 `ServerOption` |
 
-## 请求元数据
+## 元数据
 
 ```go
 md := mix.GetMetadata(ctx)
 if md != nil {
-	_ = md.TraceId
-	_ = md.Token
+	trace := md.TraceId
+	_ = trace
 }
 ```
 
-## 默认端口
+## 绑定与错误
 
-| 端口 | 用途 |
+```go
+type Q struct {
+	ID int `uri:"id" validate:"required"`
+}
+var q Q
+if err := mix.Bind(r, &q); err != nil {
+	mix.ServeError(w, err)
+	return
+}
+mix.ServeSuccess(w, data)
+```
+
+## Gateway
+
+`github.com/hopeio/mix/gateway` 提供 `UnaryCall` 与流式适配，把已有 gRPC 方法挂到 `http.ServeMux`。Gin/Fiber 对等实现在 `contrib/`。
+
+## 默认地址
+
+| 地址 | 用途 |
 |------|------|
 | `:8080` | 对外 HTTP + gRPC |
-| `:8081` | OpenAPI / pprof |
+| `:8081` | 内部诊断 / OpenAPI |
 
 ## 许可证
 

@@ -6,45 +6,41 @@
 
 [中文文档](README.zh-CN.md)
 
-**HTTP and gRPC in one process — often on the same port.**
-
-![server](_assets/server.webp)
-
 ```bash
 go get github.com/hopeio/mix@latest
 ```
 
-## What is mix?
+**mix** runs HTTP and gRPC together. Hand them an `http.Handler` and a gRPC registrar; it listens (default `:8080`), routes by `Content-Type`, and shuts down cleanly on signal.
 
-**mix** is a small Go microservice runtime. You provide an `http.Handler` and optionally register gRPC services; mix listens (default `:8080`), demultiplexes by `Content-Type`, and runs both stacks until graceful shutdown.
+## When to use it
 
-Extras that usually take a weekend to wire: access logs, unified error codes, request binding, CORS, middleware, OpenTelemetry, optional HTTP/3, and an internal port for OpenAPI (Redoc) / pprof.
+You want one binary and usually one public port for browsers/REST *and* gRPC clients, without maintaining two servers and two Service ports. mix also ships the glue people usually copy-paste: binding, error responses, access logs, CORS, middleware, OpenTelemetry, optional HTTP/3, and an internal listen address for OpenAPI/pprof.
 
-HTTP is framework-agnostic (`net/http`). Gin and Fiber adapters live under `contrib/`. `gateway/` maps Unary and streaming RPCs onto HTTP handlers.
-
-## Features
-
-- **Same-port multiplexing** — HTTP/1.1 + cleartext HTTP/2 (gRPC); optional HTTP/3 (QUIC)
-- **Any `http.Handler`** — stdlib mux, Gin, Fiber, …
-- **Gateway** — `UnaryCall` / streaming helpers under `gateway/` (plus `contrib/gin`, `contrib/fiber`)
-- **Binding** — `uri` / `query` / `header` / `form` / `json` with validation
-- **Error model** — codes aligned with gRPC; shared HTTP/gRPC response helpers
-- **Access log** — HTTP and gRPC, optional body capture and path filters
-- **OpenTelemetry** — tracing/metrics hooks
-- **Internal server** — default `:8081` for docs and pprof
-- **Lifecycle** — `SIGINT` / `SIGTERM` stops gRPC then HTTP; inject hooks for DI-style setup
-
-## Architecture
+## Behavior
 
 ```
-  Clients ──► :8080  main listener
-              ├─ gRPC Content-Type  → grpc.Server
-              └─ otherwise          → http.Handler
+inbound :8080
+  ├─ Content-Type looks like gRPC  →  grpc.Server.ServeHTTP
+  └─ everything else               →  your http.Handler
 
-  Ops     ──► :8081  internal (OpenAPI / pprof)
+inbound :8081 (optional internal)
+  └─ OpenAPI (Redoc) / pprof / metrics hooks
 ```
 
-## Minimal example
+HTTP stays on `net/http`. Prefer Gin or Fiber? Use `contrib/gin` or `contrib/fiber`. Map RPC methods to HTTP with `gateway` (stdlib) or the contrib wrappers.
+
+## Feature list
+
+- Same-listener HTTP/1.1 + h2c gRPC; optional QUIC HTTP/3
+- `WithHttpHandler` / `WithGrpcHandler` and functional options for timeouts, CORS, OTel, middleware
+- Request binding: path, query, header, form, JSON + validation
+- Error codes aligned with gRPC status; shared response helpers
+- Access logging for HTTP and gRPC (path include/exclude)
+- Metadata on context (`TraceId`, token, custom keys)
+- Graceful stop on `SIGINT` / `SIGTERM`
+- Inject hooks (`BeforeInject` / `AfterInject`) if you compose mix inside a DI bootstrap
+
+## Smallest server
 
 ```go
 package main
@@ -59,10 +55,11 @@ import (
 func main() {
 	mix.NewServer(
 		mix.WithHttpHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("hello"))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
 		})),
-		mix.WithGrpcHandler(func(s *grpc.Server) {
-			// pb.RegisterYourServiceServer(s, &impl{})
+		mix.WithGrpcHandler(func(gs *grpc.Server) {
+			// pb.RegisterXxxServer(gs, impl)
 		}),
 	).Run()
 }
@@ -72,36 +69,54 @@ func main() {
 go run ./_example
 ```
 
-## Options
+## Options cheat sheet
 
-| Option | Role |
-|--------|------|
-| `WithHttpHandler` | Main HTTP handler (required for HTTP traffic) |
+| Option | Effect |
+|--------|--------|
+| `WithHttpHandler` | Public HTTP stack |
 | `WithGrpcHandler` | Register gRPC services |
-| `WithHttp` | Tune `http.Server` (addr, timeouts, …) |
-| `WithHTTP3` | Enable HTTP/3 |
-| `WithInternalServer` | Internal listen address |
-| `WithCors` | CORS |
-| `WithOtel` | OpenTelemetry |
+| `WithHttp` | Mutate `http.Server` (addr, timeouts) |
+| `WithHTTP3` | Enable HTTP/3 + cert paths |
+| `WithInternalServer` | Docs / pprof listener |
+| `WithCors` | CORS policy |
+| `WithOtel` | Tracing / metrics |
 | `WithMiddleware` | HTTP middleware chain |
-| `WithGrpc` | gRPC interceptors / `ServerOption`s |
+| `WithGrpc` | Interceptors and `grpc.ServerOption` |
 
-## Request metadata
+## Metadata
 
 ```go
 md := mix.GetMetadata(ctx)
 if md != nil {
-	_ = md.TraceId
-	_ = md.Token
+	trace := md.TraceId
+	_ = trace
 }
 ```
 
-## Default ports
+## Binding & errors
 
-| Port | Use |
-|------|-----|
+```go
+type Q struct {
+	ID int `uri:"id" validate:"required"`
+}
+var q Q
+if err := mix.Bind(r, &q); err != nil {
+	mix.ServeError(w, err)
+	return
+}
+mix.ServeSuccess(w, data)
+```
+
+## Gateway helpers
+
+`github.com/hopeio/mix/gateway` exposes `UnaryCall` and streaming adapters so an existing gRPC method can be mounted on an `http.ServeMux`. Gin/Fiber equivalents live under `contrib/`.
+
+## Defaults
+
+| Address | Role |
+|---------|------|
 | `:8080` | Public HTTP + gRPC |
-| `:8081` | OpenAPI / pprof |
+| `:8081` | Internal diagnostics / OpenAPI |
 
 ## License
 
