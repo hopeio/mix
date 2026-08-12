@@ -33,9 +33,7 @@ func (c PyroscopeConfig) resolve(appName string) PyroscopeConfig {
 	if !out.Log && os.Getenv("PYROSCOPE_LOG") == "1" {
 		out.Log = true
 	}
-	if !out.Enabled && out.ServerAddress != "" {
-		out.Enabled = true
-	}
+	// Enabled 是总开关：false 即使配了 ServerAddress / PYROSCOPE_SERVER_ADDRESS 也不启动。
 	return out
 }
 

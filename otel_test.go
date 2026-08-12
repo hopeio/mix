@@ -89,10 +89,14 @@ func TestSetupOTelSDKSkipWhenProviderSet(t *testing.T) {
 func TestPyroscopeResolve(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_APPLICATION_NAME", "")
-	c := PyroscopeConfig{}.resolve("my-svc")
+	c := PyroscopeConfig{Enabled: true}.resolve("my-svc")
 	assert.True(t, c.Enabled)
 	assert.Equal(t, "http://127.0.0.1:4040", c.ServerAddress)
 	assert.Equal(t, "my-svc", c.ApplicationName)
+
+	off := PyroscopeConfig{Enabled: false, ServerAddress: "http://8.222.139.120:4040"}.resolve("hoper")
+	assert.False(t, off.Enabled)
+	assert.Equal(t, "http://8.222.139.120:4040", off.ServerAddress)
 }
 
 func TestSampleRatioDefault(t *testing.T) {

@@ -115,8 +115,7 @@ type OtelConfig struct {
 	// DisableRuntimeMetrics skips go.opentelemetry.io/contrib/instrumentation/runtime.
 	DisableRuntimeMetrics bool
 
-	// Pyroscope enables continuous profiling (pyroscope-go) and span labels (otel-profiling-go).
-	// Also activated when ServerAddress or PYROSCOPE_SERVER_ADDRESS is set.
+	// Pyroscope：仅 Enabled=true 时启动；地址可从 ServerAddress 或 PYROSCOPE_SERVER_ADDRESS 补。
 	Pyroscope PyroscopeConfig
 
 	OtelhttpOpts []otelhttp.Option
