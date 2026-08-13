@@ -24,6 +24,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/stats/opentelemetry"
@@ -64,6 +66,8 @@ func (s *Server) grpcHandler() *grpc.Server {
 		grpcServer := grpc.NewServer(s.Grpc.Options...)
 		s.GrpcHandler(grpcServer)
 		reflection.Register(grpcServer)
+		// 标准健康检查服务，供 grpc-health-probe / k8s gRPC 探针使用
+		healthgrpc.RegisterHealthServer(grpcServer, health.NewServer())
 		return grpcServer
 	}
 	return nil

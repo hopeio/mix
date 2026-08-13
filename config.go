@@ -55,6 +55,8 @@ type Server struct {
 	Middlewares    []httpx.Middleware
 	HttpHandler    http.Handler
 	GrpcHandler    func(*grpc.Server)
+	// DisableInternalServer 关闭内部端口（健康检查/OpenAPI/调试端点）
+	DisableInternalServer bool
 }
 
 type DebugConfig struct {
@@ -171,6 +173,10 @@ func (s *Server) Init() {
 
 	log.ValueLevelNotify("ReadTimeout", s.ReadTimeout, time.Second)
 	log.ValueLevelNotify("WriteTimeout", s.WriteTimeout, time.Second)
+	// 头部读取超时兜底，防 slowloris 占连接；只限请求头，不影响大文件上传
+	if s.ReadHeaderTimeout == 0 && s.ReadTimeout == 0 {
+		s.ReadHeaderTimeout = 10 * time.Second
+	}
 	if s.CertFile != "" && s.KeyFile != "" {
 		tlsConfig, err := tls.NewServerTLSConfig(s.CertFile, s.KeyFile)
 		if err != nil {

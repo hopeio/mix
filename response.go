@@ -100,13 +100,7 @@ func (res *CommonResp[T]) Respond(ctx context.Context, w http.ResponseWriter) (i
 		w.WriteHeader(http.StatusOK)
 	}
 
-	ow := w
-	if uw, ok := w.(httpx.Unwrapper); ok {
-		ow = uw.Unwrap()
-	}
-	if recorder, ok := ow.(httpx.RecordBodyer); ok {
-		recorder.RecordBody(data, res)
-	}
+	recordBody(w, data, res)
 	return w.Write(data)
 }
 
@@ -232,19 +226,30 @@ func RespondSuccess(ctx context.Context, w http.ResponseWriter, res any) (int, e
 	} else {
 		w.Header().Set(httpx.HeaderContentType, contentType)
 	}
-	ow := w
-	if uw, ok := w.(httpx.Unwrapper); ok {
+	recordBody(w, data, res)
+	return w.Write(data)
+}
+
+// recordBody 沿 Unwrap 链找到 RecordBodyer 记录响应体：
+// w 自身可能就是 recorder，也可能被 otelhttp 等中间件包了若干层。
+func recordBody(w http.ResponseWriter, raw []byte, v any) {
+	for ow := w; ; {
+		if recorder, ok := ow.(httpx.RecordBodyer); ok {
+			recorder.RecordBody(raw, v)
+			return
+		}
+		uw, ok := ow.(httpx.Unwrapper)
+		if !ok {
+			return
+		}
 		ow = uw.Unwrap()
 	}
-	if recorder, ok := ow.(httpx.RecordBodyer); ok {
-		recorder.RecordBody(data, res)
-	}
-	return w.Write(data)
 }
 
 func Serve(w http.ResponseWriter, r *http.Request, data any) {
 	if err, ok := data.(error); ok {
 		ServeError(w, r, err)
+		return
 	}
 	ServeSuccess(w, r, data)
 }
@@ -343,13 +348,7 @@ func (res *ErrResp) Respond(ctx context.Context, w http.ResponseWriter) (int, er
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
-	ow := w
-	if uw, ok := w.(httpx.Unwrapper); ok {
-		ow = uw.Unwrap()
-	}
-	if recorder, ok := ow.(httpx.RecordBodyer); ok {
-		recorder.RecordBody(data, res)
-	}
+	recordBody(w, data, res)
 	return w.Write(data)
 }
 

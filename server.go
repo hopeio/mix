@@ -14,6 +14,7 @@ import (
 	"net/http/httptrace"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -59,6 +60,7 @@ func (s *Server) Run() {
 	}
 
 	// Set up OpenTelemetry instrumentation (HTTP/gRPC wrappers).
+	var otelShutdown func(context.Context) error
 	if s.Otel.Enabled {
 		http.DefaultClient = &http.Client{
 			Transport: otelhttp.NewTransport(
@@ -73,6 +75,7 @@ func (s *Server) Run() {
 			log.Fatal(err)
 		}
 		if shutdownFunc != nil {
+			otelShutdown = shutdownFunc
 			defer shutdownFunc(sigCtx)
 		}
 		s.tracer = otel.Tracer(ScopeName)
@@ -155,24 +158,32 @@ func (s *Server) Run() {
 		}
 	}()
 
-	s.InternalHandler(http.DefaultServeMux)
-	if s.InternalServer.BaseContext == nil {
-		s.InternalServer.BaseContext = func(_ net.Listener) context.Context {
-			return sigCtx
+	if !s.DisableInternalServer {
+		s.InternalHandler(http.DefaultServeMux)
+		if s.InternalServer.BaseContext == nil {
+			s.InternalServer.BaseContext = func(_ net.Listener) context.Context {
+				return sigCtx
+			}
 		}
+		if s.InternalServer.Handler == nil {
+			s.InternalServer.Handler = http.DefaultServeMux
+		}
+		go func() {
+			log.Infof("internal listening: %s", s.InternalServer.Addr)
+			srvErr <- s.InternalServer.ListenAndServe()
+		}()
 	}
-	if s.InternalServer.Handler == nil {
-		s.InternalServer.Handler = http.DefaultServeMux
-	}
-	go func() {
-		log.Infof("internal listening: %s", s.InternalServer.Addr)
-		srvErr <- s.InternalServer.ListenAndServe()
-	}()
 
 	// Wait for interruption.
 	select {
 	case err := <-srvErr:
-		// Error when starting HTTP server.
+		// 启动/监听失败：log.Fatal 会跳过所有 defer，先手动做清理（信号注销、OTel flush）
+		stop()
+		if otelShutdown != nil {
+			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			otelShutdown(flushCtx)
+			cancel()
+		}
 		log.Fatalf("failed to serve: %v", err)
 	case <-sigCtx.Done():
 		// Wait for first CTRL+C.
@@ -185,25 +196,51 @@ func (s *Server) Run() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	// gRPC / HTTP / HTTP3 / internal 并行优雅关停，共享一个超时预算
+	var wg sync.WaitGroup
 	if grpcServer != nil {
-		grpcStopped := make(chan struct{})
+		wg.Add(1)
 		go func() {
-			grpcServer.GracefulStop()
-			close(grpcStopped)
+			defer wg.Done()
+			grpcStopped := make(chan struct{})
+			go func() {
+				grpcServer.GracefulStop()
+				close(grpcStopped)
+			}()
+			select {
+			case <-grpcStopped:
+			case <-shutdownCtx.Done():
+				// 超时后强制关停
+				grpcServer.Stop()
+			}
 		}()
-		select {
-		case <-grpcStopped:
-		case <-shutdownCtx.Done():
-			// 超时后强制关停
-			grpcServer.Stop()
+	}
+	if s.HTTP3.Enabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.HTTP3.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := s.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error(err)
 		}
+	}()
+	if !s.DisableInternalServer {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.InternalServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error(err)
+			}
+		}()
 	}
-	if err := s.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error(err)
-	}
-	if err := s.InternalServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error(err)
-	}
+	wg.Wait()
 }
 
 func (s *Server) WithContext(ctx context.Context) *Server {

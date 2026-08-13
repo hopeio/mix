@@ -24,8 +24,15 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// InternalHandler 往内部端口的私有 mux 上注册 OpenAPI 文档与调试端点
+// InternalHandler 往内部端口的私有 mux 上注册健康检查、OpenAPI 文档与调试端点
 func (s *Server) InternalHandler(mux *http.ServeMux) {
+	// k8s / 负载均衡标准探针端点
+	healthz := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	mux.Handle("/healthz", healthz)
+	mux.Handle("/readyz", healthz)
 	if s.Openapi.Enabled {
 		openapi.Openapi(mux, s.Openapi.UriPrefix, s.Openapi.Dir)
 	}
@@ -45,6 +52,8 @@ func (s *Server) httpHandler() http.Handler {
 				se := &ErrResp{Code: Internal, Msg: sysErrMsg}
 				buf, contentType, _ := DefaultMarshal(r.Context(), se)
 				w.Header().Set(httpx.HeaderContentType, contentType)
+				// panic 属系统错误，必须以 500 告知客户端（若响应头已写出则此调用为 no-op）
+				w.WriteHeader(http.StatusInternalServerError)
 				w.Write(buf)
 			}
 		}()
