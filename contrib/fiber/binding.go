@@ -49,7 +49,9 @@ func (s RequestSource) Body() (context.Context, string, io.ReadCloser) {
 	if req.IsBodyStream() {
 		return s.RequestCtx(), contentType, iox.WrapReader(req.BodyStream(), req.CloseBodyStream)
 	}
-	return s.RequestCtx(), contentType, iox.RawBytes(req.Body())
+	// RawBytes.Read 为指针接收者（消费型读取），需取地址实现 io.ReadCloser
+	rb := iox.RawBytes(req.Body())
+	return s.RequestCtx(), contentType, &rb
 }
 
 type ArgsSource fasthttp.Args
