@@ -14,9 +14,9 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	iox "github.com/hopeio/gox/io"
-	"github.com/hopeio/mix"
-	stringsx "github.com/hopeio/gox/strings"
 	"github.com/hopeio/gox/kvstruct"
+	stringsx "github.com/hopeio/gox/strings"
+	"github.com/hopeio/mix"
 	"github.com/valyala/fasthttp"
 )
 
@@ -68,7 +68,6 @@ func (form *ArgsSource) Get(key string) ([]string, bool) {
 
 type CtxSource fasthttp.RequestCtx
 
-
 func (form *CtxSource) Get(key string) (string, bool) {
 	v := (*fasthttp.RequestCtx)(form).UserValue(key).(string)
 	return v, v != ""
@@ -78,7 +77,7 @@ type HeaderSource fasthttp.RequestHeader
 
 func (form *HeaderSource) Get(key string) ([]string, bool) {
 	var values []string
-	for k,v:=range (*fasthttp.RequestHeader)(form).All() {
+	for k, v := range (*fasthttp.RequestHeader)(form).All() {
 		if string(k) == key {
 			v, _ := url.QueryUnescape(stringsx.FromBytes(v))
 			values = append(values, v)
@@ -86,7 +85,6 @@ func (form *HeaderSource) Get(key string) ([]string, bool) {
 	}
 	return values, len(values) > 0
 }
-
 
 type uriSource struct {
 	fiber.Ctx
