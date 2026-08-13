@@ -479,8 +479,10 @@ func (res *ResponseFile) Respond(ctx context.Context, w http.ResponseWriter) (in
 			}
 		} else {
 			limitedWriter = iox.NewLimitedWriter(512)
+			// io.EOF 表示探测缓冲已满且流还有剩余（LimitedWriter 的约定），
+			// 剩余部分由下方第二次 WriteTo 继续输出；旧行为静默吞掉超出 512 字节的内容
 			_, err := res.Body.WriteTo(&limitedWriter)
-			if err != nil {
+			if err != nil && !errors.Is(err, io.EOF) {
 				return 0, err
 			}
 			contentType = http.DetectContentType(limitedWriter)
