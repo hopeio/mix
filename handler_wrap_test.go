@@ -28,13 +28,11 @@ func init() {
 
 func parseWrappedErrResp(t *testing.T, body []byte) ErrResp {
 	t.Helper()
-	var wrap struct {
-		Data ErrResp `json:"data"`
-	}
-	if err := json.Unmarshal(body, &wrap); err != nil {
+	var er ErrResp
+	if err := json.Unmarshal(body, &er); err != nil {
 		t.Fatalf("unmarshal body=%q: %v", string(body), err)
 	}
-	return wrap.Data
+	return er
 }
 
 func TestHandlerWrap_SuccessJSON(t *testing.T) {

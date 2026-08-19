@@ -108,6 +108,23 @@ func TestStatusFromErrCode_AndRespondHeaders(t *testing.T) {
 	}
 }
 
+func TestErrResp_RespondAlwaysWritesHeaders(t *testing.T) {
+	rec := httptest.NewRecorder()
+	resp := NewErrResp(NotFound, "auth.err.missing", map[string]string{"id": "1"})
+	if _, err := resp.Respond(t.Context(), rec); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Header().Get(httpx.HeaderErrorCode) != "5" {
+		t.Fatalf("Error-Code=%q", rec.Header().Get(httpx.HeaderErrorCode))
+	}
+	if rec.Header().Get(httpx.HeaderErrorMsg) != "auth.err.missing" {
+		t.Fatalf("Error-Msg=%q", rec.Header().Get(httpx.HeaderErrorMsg))
+	}
+	if rec.Header().Get(httpx.HeaderGrpcStatus) != "5" {
+		t.Fatalf("Grpc-Status=%q", rec.Header().Get(httpx.HeaderGrpcStatus))
+	}
+}
+
 func TestCommonResp_RespondSuccess(t *testing.T) {
 	rec := httptest.NewRecorder()
 	resp := &CommonResp[string]{Code: Success, Data: "ok"}

@@ -16,8 +16,16 @@ var (
 		switch msg := v.(type) {
 		case *CommonAnyResp, *ErrResp:
 			data, err = jsonx.Marshal(msg)
+			if err != nil {
+				return data, httpx.ContentTypeText, err
+			}
+			return data, httpx.ContentTypeJson, nil
 		case error:
 			data, err = jsonx.Marshal(ErrRespFrom(msg))
+			if err != nil {
+				return data, httpx.ContentTypeText, err
+			}
+			return data, httpx.ContentTypeJson, nil
 		}
 		data, err = jsonx.Marshal(&CommonAnyResp{Data: v})
 		if err != nil {
@@ -27,7 +35,6 @@ var (
 	}
 )
 
-
 func JsonMarshal(ctx context.Context, v any) ([]byte, string, error) {
 	data, err := jsonx.Marshal(v)
 	if err != nil {
@@ -35,7 +42,6 @@ func JsonMarshal(ctx context.Context, v any) ([]byte, string, error) {
 	}
 	return data, httpx.ContentTypeJson, nil
 }
-
 
 type BindFunc func(r Source, v any) error
 type MarshalFunc func(ctx context.Context, v any) (data []byte, contentType string, err error)

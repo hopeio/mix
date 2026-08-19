@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/hopeio/mix"
 	jsonx "github.com/hopeio/gox/encoding/json"
 	httpx "github.com/hopeio/gox/net/http"
+	"github.com/hopeio/mix"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -141,8 +141,17 @@ func unmarshalInner(inner []byte, v any) error {
 }
 
 func ProtobufMarshal(ctx context.Context, v any) ([]byte, string, error) {
-	if p, ok := v.(proto.Message); ok {
-		data, err := proto.Marshal(p)
+	switch msg := v.(type) {
+	case *mix.ErrResp:
+		data, err := proto.Marshal(msg.ErrorInfo())
+		if err != nil {
+			return data, httpx.ContentTypeText, err
+		}
+		return data, httpx.ContentTypeXProtobuf, nil
+	case error:
+		return ProtobufMarshal(ctx, mix.ErrRespFrom(msg))
+	case proto.Message:
+		data, err := proto.Marshal(msg)
 		if err != nil {
 			return data, httpx.ContentTypeText, err
 		}

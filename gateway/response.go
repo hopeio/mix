@@ -6,8 +6,8 @@ import (
 	"net/textproto"
 	"strconv"
 
-	"github.com/hopeio/mix"
 	httpx "github.com/hopeio/gox/net/http"
+	"github.com/hopeio/mix"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -83,12 +83,10 @@ func FinalizeStreamTrailers(w http.ResponseWriter, started bool, err error, trai
 var HandleError = func(w http.ResponseWriter, r *http.Request, err error) {
 	s := ErrRespFromError(err)
 	delete(r.Header, httpx.HeaderTrailer)
-	errcodeHeader := strconv.Itoa(int(s.Code))
 	buf, contentType, _ := mix.DefaultMarshal(r.Context(), s)
 	header := w.Header()
 	header.Set(httpx.HeaderContentType, contentType)
-	header.Set(httpx.HeaderGrpcStatus, errcodeHeader)
-	header.Set(httpx.HeaderErrorCode, errcodeHeader)
+	mix.WriteErrHeaders(header, s.Code, s.Msg)
 	ow := w
 	if uw, ok := w.(httpx.Unwrapper); ok {
 		ow = uw.Unwrap()
@@ -102,18 +100,5 @@ var HandleError = func(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func ErrRespFromError(err error) *mix.ErrResp {
-	if err == nil {
-		return nil
-	}
-	s, ok := status.FromError(err)
-	if ok {
-		return &mix.ErrResp{
-			Code: mix.ErrCode(s.Code()),
-			Msg:  s.Message(),
-		}
-	}
-	if errresp, ok := err.(*mix.ErrResp); ok {
-		return errresp
-	}
 	return mix.ErrRespFrom(err)
 }

@@ -54,6 +54,25 @@ func RespodWithErrHeader(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ErrHeaderKey, true)
 }
 
+type headerSetter interface {
+	Set(key, value string)
+}
+
+// WriteErrHeaders 在业务错误时写入 Error-Code / Grpc-Status 以及 i18n key
+// （Error-Msg / Grpc-Message）。HTTP protobuf 客户端靠这些头判断是否出错。
+func WriteErrHeaders(h headerSetter, code ErrCode, msg string) {
+	if h == nil || code == Success {
+		return
+	}
+	cs := strconv.Itoa(int(code))
+	h.Set(httpx.HeaderErrorCode, cs)
+	h.Set(httpx.HeaderGrpcStatus, cs)
+	if msg != "" {
+		h.Set(httpx.HeaderErrorMsg, msg)
+		h.Set(httpx.HeaderGrpcMessage, msg)
+	}
+}
+
 func StatusFromErrCode(code ErrCode) int {
 	if status, ok := errCodeHttpStatusMap[code]; ok {
 		return status
@@ -80,17 +99,11 @@ func (res *CommonResp[T]) Respond(ctx context.Context, w http.ResponseWriter) (i
 	}
 	if wx, ok := w.(ResponseWriter); ok {
 		header := wx.HeaderX()
-		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
-			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
-			header.Set(httpx.HeaderErrorMsg, res.Msg)
-		}
+		WriteErrHeaders(header, res.Code, res.Msg)
 		header.Set(httpx.HeaderContentType, contentType)
 	} else {
 		header := w.Header()
-		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
-			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
-			header.Set(httpx.HeaderErrorMsg, res.Msg)
-		}
+		WriteErrHeaders(header, res.Code, res.Msg)
 		header.Set(httpx.HeaderContentType, contentType)
 	}
 
@@ -301,6 +314,16 @@ func ErrRespFrom(err error) *ErrResp {
 	if se, ok := err.(errresp); ok {
 		return se.ErrResp()
 	}
+	if st, ok := status.FromError(err); ok {
+		er := NewErrResp(ErrCode(st.Code()), st.Message(), nil)
+		for _, d := range st.Details() {
+			if ei, ok := d.(*errdetails.ErrorInfo); ok && len(ei.Metadata) > 0 {
+				er.Data = ei.Metadata
+				break
+			}
+		}
+		return er
+	}
 	rv := reflect.ValueOf(err)
 	kind := rv.Kind()
 	if kind >= reflect.Int && kind <= reflect.Int64 {
@@ -320,17 +343,11 @@ func (res *ErrResp) Respond(ctx context.Context, w http.ResponseWriter) (int, er
 	data, contentType, _ := DefaultMarshal(ctx, res)
 	if wx, ok := w.(ResponseWriter); ok {
 		header := wx.HeaderX()
-		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
-			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
-			header.Set(httpx.HeaderErrorMsg, res.Msg)
-		}
+		WriteErrHeaders(header, res.Code, res.Msg)
 		header.Set(httpx.HeaderContentType, contentType)
 	} else {
 		header := w.Header()
-		if res.Code != Success && ctx.Value(ErrHeaderKey) != nil {
-			header.Set(httpx.HeaderErrorCode, strconv.Itoa(int(res.Code)))
-			header.Set(httpx.HeaderErrorMsg, res.Msg)
-		}
+		WriteErrHeaders(header, res.Code, res.Msg)
 		header.Set(httpx.HeaderContentType, contentType)
 	}
 	if res.Code != Success {
@@ -352,13 +369,23 @@ func (x *ErrResp) GRPCStatus() *status.Status {
 	// 变量放进标准 google.rpc.ErrorInfo 的 metadata——它是 gRPC 错误详情的
 	// 标准类型，grpc-go/grpc-dart 客户端都会自动解码，无需手写 wire。
 	if len(x.Data) > 0 {
-		if st2, err := st.WithDetails(&errdetails.ErrorInfo{
-			Metadata: x.Data,
-		}); err == nil {
+		if st2, err := st.WithDetails(x.ErrorInfo()); err == nil {
 			return st2
 		}
 	}
 	return st
+}
+
+// ErrorInfo 把 HTTP protobuf 错误体编成 google.rpc.ErrorInfo：
+// reason = i18n key（同 msg），metadata = 占位符变量（同 data）。
+func (x *ErrResp) ErrorInfo() *errdetails.ErrorInfo {
+	if x == nil {
+		return &errdetails.ErrorInfo{}
+	}
+	return &errdetails.ErrorInfo{
+		Reason:   x.Msg,
+		Metadata: x.Data,
+	}
 }
 
 func (x *ErrResp) Error() string {

@@ -36,3 +36,21 @@ func TestJsonMarshal_Error(t *testing.T) {
 		t.Fatalf("content-type=%q", ct)
 	}
 }
+
+func TestDefaultMarshal_ErrResp(t *testing.T) {
+	er := NewErrResp(InvalidArgument, "auth.err.x", map[string]string{"k": "v"})
+	data, ct, err := DefaultMarshal(t.Context(), er)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ct != httpx.ContentTypeJson {
+		t.Fatalf("content-type=%q", ct)
+	}
+	var got ErrResp
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Code != InvalidArgument || got.Msg != "auth.err.x" || got.Data["k"] != "v" {
+		t.Fatalf("got=%+v body=%s", got, data)
+	}
+}

@@ -39,6 +39,14 @@ func TestErrRespGRPCStatusDetail(t *testing.T) {
 	}
 }
 
+func TestErrRespFromGRPCStatusDetails(t *testing.T) {
+	src := mix.NewErrResp(mix.InvalidArgument, "auth.err.thirdLogin", map[string]string{"type": "Apple"})
+	got := mix.ErrRespFrom(src.GRPCStatus().Err())
+	if got.Code != mix.InvalidArgument || got.Msg != "auth.err.thirdLogin" || got.Data["type"] != "Apple" {
+		t.Fatalf("got=%+v", got)
+	}
+}
+
 // data 为空时不带 details，保持原行为。
 func TestErrRespGRPCStatusNoData(t *testing.T) {
 	st := mix.InvalidArgument.Msg("auth.err.notActivated").GRPCStatus()
