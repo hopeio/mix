@@ -101,7 +101,7 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) fiber.Handler {
 		err := Bind(ctx, req)
 		if err != nil {
 			httpReq, _ := http.NewRequestWithContext(ctx.RequestCtx(), ctx.Method(), ctx.OriginalURL(), nil)
-			mix.ServeError(NewResponseWriter(ctx), httpReq, mix.InvalidArgument.Msg(err.Error()))
+			mix.ServeError(NewResponseWriter(ctx), httpReq, mix.InvalidArgument.Wrap(err))
 			return nil
 		}
 
@@ -126,7 +126,7 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) fiber.
 		err := Bind(ctx, req)
 		if err != nil {
 			httpReq, _ := http.NewRequestWithContext(ctx.RequestCtx(), ctx.Method(), ctx.OriginalURL(), nil)
-			mix.ServeError(NewResponseWriter(ctx), httpReq, mix.InvalidArgument.Msg(err.Error()))
+			mix.ServeError(NewResponseWriter(ctx), httpReq, mix.InvalidArgument.Wrap(err))
 			return nil
 		}
 

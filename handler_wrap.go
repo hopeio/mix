@@ -31,7 +31,7 @@ func HandlerWrap[REQ, RESP any](service Service[*REQ, *RESP]) http.Handler {
 		req := new(REQ)
 		err := Bind(r, req)
 		if err != nil {
-			ServeError(w, r, InvalidArgument.Msg(err.Error()))
+			ServeError(w, r, InvalidArgument.Wrap(err))
 			return
 		}
 		res, resperr := service(ReqResp{r, w}, req)

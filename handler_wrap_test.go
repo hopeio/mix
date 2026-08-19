@@ -84,7 +84,7 @@ func TestHandlerWrap_BindFailure400(t *testing.T) {
 
 func TestHandlerWrap_ServiceErrResp(t *testing.T) {
 	h := HandlerWrap(func(_ ReqResp, _ *wrapEchoReq) (*wrapEchoResp, *ErrResp) {
-		return nil, NotFound.Msg("gone")
+		return nil, NotFound.Msg("gone", nil)
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"name":"x"}`))
@@ -142,7 +142,7 @@ func TestHandlerWrapCommon_BindFailure400(t *testing.T) {
 
 func TestHandlerWrapCommon_ServiceError(t *testing.T) {
 	h := HandlerWrapCommon(func(_ context.Context, _ *wrapEchoReq) (*wrapEchoResp, error) {
-		return nil, PermissionDenied.Msg("denied")
+		return nil, PermissionDenied.Msg("denied", nil)
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"name":"x"}`))

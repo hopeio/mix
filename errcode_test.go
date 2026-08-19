@@ -17,7 +17,7 @@ func TestErrCode_StringAndHelpers(t *testing.T) {
 	if ErrCode(1001).String() != "Custom" {
 		t.Fatalf("custom String=%q", ErrCode(1001).String())
 	}
-	er := NotFound.Msg("gone")
+	er := NotFound.Msg("gone", nil)
 	if er.Code != NotFound || er.Msg != "gone" {
 		t.Fatalf("Msg helper: %+v", er)
 	}

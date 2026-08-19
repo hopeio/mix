@@ -49,11 +49,11 @@ func TestErrRespFromGRPCStatusDetails(t *testing.T) {
 
 // data 为空时不带 details，保持原行为。
 func TestErrRespGRPCStatusNoData(t *testing.T) {
-	st := mix.InvalidArgument.Msg("auth.err.notActivated").GRPCStatus()
+	st := mix.InvalidArgument.Msg("auth.err.notActivated", nil).GRPCStatus()
 	if len(st.Details()) != 0 {
 		t.Fatalf("details = %v", st.Details())
 	}
-	if status.Code(mix.InvalidArgument.Msg("x").GRPCStatus().Err()) != codes.InvalidArgument {
+	if status.Code(mix.InvalidArgument.Msg("x", nil).GRPCStatus().Err()) != codes.InvalidArgument {
 		t.Fatal("code")
 	}
 }

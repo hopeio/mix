@@ -97,7 +97,7 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 		md.IncomingMD = nil
 	}
 	if err = validator.ValidateStruct(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, err
 	}
 	resp, err = handler(ctx, req)
 
@@ -225,7 +225,7 @@ func (s *recvWrapper) RecvMsg(m interface{}) error {
 	// 必须先接收数据再校验，否则校验的是零值结构体
 	s.Request = m
 	if err := validator.ValidateStruct(m); err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
+		return err
 	}
 	return nil
 }

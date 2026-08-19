@@ -73,12 +73,17 @@ func (x ErrCode) ErrResp() *ErrResp {
 	return &ErrResp{Code: x, Msg: x.String()}
 }
 
-func (x ErrCode) Msg(msg string) *ErrResp {
-	return &ErrResp{Code: x, Msg: msg}
+func (x ErrCode) Msg(msg string, data map[string]string) *ErrResp {
+	return &ErrResp{Code: x, Msg: msg, Data: data}
 }
 
 func (x ErrCode) Wrap(err error) *ErrResp {
-	return &ErrResp{Code: x, Msg: err.Error()}
+	if err == nil {
+		return x.ErrResp()
+	}
+	errResp := ErrRespFrom(err)
+	errResp.Code = x
+	return errResp
 }
 
 func (x ErrCode) Error() string {
