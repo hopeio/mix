@@ -16,17 +16,16 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strconv"
 
 	iox "github.com/hopeio/gox/io"
 	httpx "github.com/hopeio/gox/net/http"
 	strings "github.com/hopeio/gox/strings"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type ResponseWriter interface {
@@ -349,43 +348,17 @@ func (res *ErrResp) ErrResp() *ErrResp {
 
 func (x *ErrResp) GRPCStatus() *status.Status {
 	st := status.New(codes.Code(x.Code), x.Msg)
-	// data 是 msg i18n 词条的 {k} 占位符变量，作为 response.ErrResp 详情带给客户端翻译；
-	// code/msg 已在 gRPC status 本身，detail 只携带 data。
-	// 注意：不能走 WithDetails——它会对入参再做一次 anypb.New 包装，
-	// 传入 anypb.Any 会变成 Any 套 Any（外层 typeUrl 变成 google.protobuf.Any），
-	// 客户端就认不出来了；直接把单层 Any 塞进 status proto 的 details。
+	// data 是 msg i18n 词条的 {k} 占位符变量；code/msg 已在 status 本身，
+	// 变量放进标准 google.rpc.ErrorInfo 的 metadata——它是 gRPC 错误详情的
+	// 标准类型，grpc-go/grpc-dart 客户端都会自动解码，无需手写 wire。
 	if len(x.Data) > 0 {
-		pb := st.Proto()
-		pb.Details = append(pb.Details, x.errRespDetailAny())
-		return status.FromProto(pb)
+		if st2, err := st.WithDetails(&errdetails.ErrorInfo{
+			Metadata: x.Data,
+		}); err == nil {
+			return st2
+		}
 	}
 	return st
-}
-
-// errRespDetailAny 手写 response.ErrResp 的 proto wire 编码作为 Any 载荷，
-// 只编码 data（code/msg 已在 gRPC status 里，不重复传）；
-// 不直接依赖 hopeio/protobuf/response（它反向依赖 mix，会成环），
-// 编码方式与 CommonProtoResp.MarshalProto 一致。
-func (x *ErrResp) errRespDetailAny() *anypb.Any {
-	buf := make([]byte, 0, 64)
-	keys := make([]string, 0, len(x.Data))
-	for k := range x.Data {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		entry := make([]byte, 0, len(k)+len(x.Data[k])+8)
-		entry = protowire.AppendVarint(entry, 0x0A)
-		entry = protowire.AppendString(entry, k)
-		entry = protowire.AppendVarint(entry, 0x12)
-		entry = protowire.AppendString(entry, x.Data[k])
-		buf = protowire.AppendVarint(buf, 0x1A)
-		buf = protowire.AppendBytes(buf, entry)
-	}
-	return &anypb.Any{
-		TypeUrl: "type.googleapis.com/response.ErrResp",
-		Value:   buf,
-	}
 }
 
 func (x *ErrResp) Error() string {
