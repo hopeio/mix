@@ -68,7 +68,7 @@ func TestErrRespFrom(t *testing.T) {
 	if ErrRespFrom(nil) != nil {
 		t.Fatal("nil err -> nil")
 	}
-	orig := NewErrResp(NotFound, "x")
+	orig := NewErrResp(NotFound, "x", nil)
 	if ErrRespFrom(orig) != orig {
 		t.Fatal("want same *ErrResp")
 	}
@@ -93,7 +93,7 @@ func TestStatusFromErrCode_AndRespondHeaders(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ctx := RespodWithErrHeader(t.Context())
-	resp := NewErrResp(NotFound, "missing")
+	resp := NewErrResp(NotFound, "missing", nil)
 	if _, err := resp.Respond(ctx, rec); err != nil {
 		t.Fatal(err)
 	}

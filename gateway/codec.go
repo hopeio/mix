@@ -178,10 +178,10 @@ func JsonMarshal(ctx context.Context, v any) (data []byte, contentType string, e
 		}
 		return data, httpx.ContentTypeJson, nil
 	case *spb.Status:
-		data, _ = jsonx.Marshal(mix.NewErrResp(mix.ErrCode(msg.Code), msg.Message))
+		data, _ = jsonx.Marshal(mix.NewErrResp(mix.ErrCode(msg.Code), msg.Message, nil))
 		return data, httpx.ContentTypeJson, nil
 	case *status.Status:
-		data, _ = jsonx.Marshal(mix.NewErrResp(mix.ErrCode(msg.Code()), msg.Message()))
+		data, _ = jsonx.Marshal(mix.NewErrResp(mix.ErrCode(msg.Code()), msg.Message(), nil))
 		return data, httpx.ContentTypeJson, nil
 	case error:
 		data, _ = jsonx.Marshal(mix.ErrRespFrom(msg))

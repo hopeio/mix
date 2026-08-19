@@ -16,16 +16,17 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 
 	iox "github.com/hopeio/gox/io"
 	httpx "github.com/hopeio/gox/net/http"
-	"github.com/hopeio/gox/strings"
-	stringsx "github.com/hopeio/gox/strings"
+	strings "github.com/hopeio/gox/strings"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type ResponseWriter interface {
@@ -196,14 +197,6 @@ func NewCommonAnyResp(code ErrCode, msg string, data any) *CommonAnyResp {
 	}
 }
 
-func ServeErrCodeMsg(w http.ResponseWriter, r *http.Request, code ErrCode, msg string) {
-	NewErrResp(code, msg).ServeHTTP(w, r)
-}
-
-func RespondErrCodeMsg(ctx context.Context, w http.ResponseWriter, code ErrCode, msg string) {
-	NewErrResp(code, msg).Respond(ctx, w)
-}
-
 func ServeError(w http.ResponseWriter, r *http.Request, err error) {
 	ErrRespFrom(err).ServeHTTP(w, r)
 }
@@ -288,15 +281,13 @@ func (res *Response) Respond(ctx context.Context, w http.ResponseWriter) (int, e
 	return int(n), err
 }
 
-type ErrResp struct {
-	Code ErrCode `json:"code"`
-	Msg  string  `json:"msg,omitempty"`
-}
+type ErrResp CommonResp[map[string]string]
 
-func NewErrResp(code ErrCode, msg string) *ErrResp {
+func NewErrResp(code ErrCode, msg string, data map[string]string) *ErrResp {
 	return &ErrResp{
 		Code: code,
 		Msg:  msg,
+		Data: data,
 	}
 }
 
@@ -314,12 +305,12 @@ func ErrRespFrom(err error) *ErrResp {
 	rv := reflect.ValueOf(err)
 	kind := rv.Kind()
 	if kind >= reflect.Int && kind <= reflect.Int64 {
-		return NewErrResp(ErrCode(rv.Int()), err.Error())
+		return NewErrResp(ErrCode(rv.Int()), err.Error(), nil)
 	}
 	if kind >= reflect.Uint && kind <= reflect.Uint64 {
-		return NewErrResp(ErrCode(rv.Uint()), err.Error())
+		return NewErrResp(ErrCode(rv.Uint()), err.Error(), nil)
 	}
-	return NewErrResp(Unknown, err.Error())
+	return NewErrResp(Unknown, err.Error(), nil)
 }
 
 func (res *ErrResp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -357,15 +348,51 @@ func (res *ErrResp) ErrResp() *ErrResp {
 }
 
 func (x *ErrResp) GRPCStatus() *status.Status {
-	return status.New(codes.Code(x.Code), x.Msg)
+	st := status.New(codes.Code(x.Code), x.Msg)
+	// data 是 msg i18n 词条的 {k} 占位符变量，作为 response.ErrResp 详情带给客户端翻译。
+	if len(x.Data) > 0 {
+		if st2, err := st.WithDetails(x.errRespDetailAny()); err == nil {
+			return st2
+		}
+	}
+	return st
+}
+
+// errRespDetailAny 手写 response.ErrResp 的 proto wire 编码作为 Any 载荷；
+// 不直接依赖 hopeio/protobuf/response（它反向依赖 mix，会成环），
+// 编码方式与 CommonProtoResp.MarshalProto 一致。
+func (x *ErrResp) errRespDetailAny() *anypb.Any {
+	buf := make([]byte, 0, 64)
+	if x.Code != 0 {
+		buf = protowire.AppendVarint(buf, 0x08)
+		buf = protowire.AppendVarint(buf, uint64(x.Code))
+	}
+	if x.Msg != "" {
+		buf = protowire.AppendVarint(buf, 0x12)
+		buf = protowire.AppendString(buf, x.Msg)
+	}
+	keys := make([]string, 0, len(x.Data))
+	for k := range x.Data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		entry := make([]byte, 0, len(k)+len(x.Data[k])+8)
+		entry = protowire.AppendVarint(entry, 0x0A)
+		entry = protowire.AppendString(entry, k)
+		entry = protowire.AppendVarint(entry, 0x12)
+		entry = protowire.AppendString(entry, x.Data[k])
+		buf = protowire.AppendVarint(buf, 0x1A)
+		buf = protowire.AppendBytes(buf, entry)
+	}
+	return &anypb.Any{
+		TypeUrl: "type.googleapis.com/response.ErrResp",
+		Value:   buf,
+	}
 }
 
 func (x *ErrResp) Error() string {
-	return fmt.Sprintf("code: %d, msg: %s", x.Code, x.Msg)
-}
-
-func (x *ErrResp) MarshalJSON() ([]byte, error) {
-	return stringsx.ToBytes(`{"code":` + strconv.Itoa(int(x.Code)) + `,"msg":` + strconv.Quote(x.Msg) + `}`), nil
+	return fmt.Sprintf("code: %d, msg: %s, data: %v", x.Code, x.Msg, x.Data)
 }
 
 type ResponseStream struct {
