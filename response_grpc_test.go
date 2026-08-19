@@ -15,6 +15,7 @@ import (
 // 注意断言走 st.Proto().GetDetails()（真实上网络的 wire 层）而非 st.Details()：
 // 回归 Any 套 Any bug——WithDetails 会把 anypb.Any 再包一层，
 // 外层 typeUrl 变成 google.protobuf.Any，客户端就认不出了。
+// detail 只携带 data，code/msg 由 status 本身承载，不重复传输。
 func TestErrRespGRPCStatusDetail(t *testing.T) {
 	e := mix.NewErrResp(mix.InvalidArgument, "auth.err.thirdLogin", map[string]string{"type": "Apple", "x": "y"})
 	st := e.GRPCStatus()
@@ -32,7 +33,7 @@ func TestErrRespGRPCStatusDetail(t *testing.T) {
 	if err := proto.Unmarshal(wire[0].Value, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Code != int32(mix.InvalidArgument) || got.Msg != "auth.err.thirdLogin" ||
+	if got.Code != 0 || got.Msg != "" ||
 		got.Data["type"] != "Apple" || got.Data["x"] != "y" {
 		t.Fatalf("decoded = %+v", &got)
 	}
