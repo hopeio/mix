@@ -350,10 +350,13 @@ func (res *ErrResp) ErrResp() *ErrResp {
 func (x *ErrResp) GRPCStatus() *status.Status {
 	st := status.New(codes.Code(x.Code), x.Msg)
 	// data 是 msg i18n 词条的 {k} 占位符变量，作为 response.ErrResp 详情带给客户端翻译。
+	// 注意：不能走 WithDetails——它会对入参再做一次 anypb.New 包装，
+	// 传入 anypb.Any 会变成 Any 套 Any（外层 typeUrl 变成 google.protobuf.Any），
+	// 客户端就认不出来了；直接把单层 Any 塞进 status proto 的 details。
 	if len(x.Data) > 0 {
-		if st2, err := st.WithDetails(x.errRespDetailAny()); err == nil {
-			return st2
-		}
+		pb := st.Proto()
+		pb.Details = append(pb.Details, x.errRespDetailAny())
+		return status.FromProto(pb)
 	}
 	return st
 }

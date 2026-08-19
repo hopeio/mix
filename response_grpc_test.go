@@ -8,30 +8,28 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // 用 pb 版 ErrResp 验证 mix 手写的 detail wire 编码可被正确解码
 // （mix 依赖 hopeio/protobuf 会成环，只能在 external test 包里做交叉验证）。
+// 注意断言走 st.Proto().GetDetails()（真实上网络的 wire 层）而非 st.Details()：
+// 回归 Any 套 Any bug——WithDetails 会把 anypb.Any 再包一层，
+// 外层 typeUrl 变成 google.protobuf.Any，客户端就认不出了。
 func TestErrRespGRPCStatusDetail(t *testing.T) {
 	e := mix.NewErrResp(mix.InvalidArgument, "auth.err.thirdLogin", map[string]string{"type": "Apple", "x": "y"})
 	st := e.GRPCStatus()
 	if st.Code() != codes.InvalidArgument {
 		t.Fatalf("code = %v", st.Code())
 	}
-	details := st.Details()
-	if len(details) != 1 {
-		t.Fatalf("details = %d", len(details))
+	wire := st.Proto().GetDetails()
+	if len(wire) != 1 {
+		t.Fatalf("details = %d", len(wire))
 	}
-	any, ok := details[0].(*anypb.Any)
-	if !ok {
-		t.Fatalf("detail type %T", details[0])
-	}
-	if any.TypeUrl != "type.googleapis.com/response.ErrResp" {
-		t.Fatalf("typeUrl = %s", any.TypeUrl)
+	if wire[0].TypeUrl != "type.googleapis.com/response.ErrResp" {
+		t.Fatalf("typeUrl = %s", wire[0].TypeUrl)
 	}
 	var got responsepb.ErrResp
-	if err := proto.Unmarshal(any.Value, &got); err != nil {
+	if err := proto.Unmarshal(wire[0].Value, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Code != int32(mix.InvalidArgument) || got.Msg != "auth.err.thirdLogin" ||
