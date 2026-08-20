@@ -4,9 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	httpx "github.com/hopeio/gox/net/http"
+	"google.golang.org/grpc/codes"
 )
 
 func TestErrCode_StringAndHelpers(t *testing.T) {
@@ -49,18 +51,43 @@ func TestErrCode_Error(t *testing.T) {
 	}
 }
 
+func TestErrCodeLayout(t *testing.T) {
+	c := ErrCode(3001)*100 + ErrCode(codes.PermissionDenied)
+	if c.BizCode() != 3001 || c.GRPCCode() != codes.PermissionDenied {
+		t.Fatalf("roundtrip: biz=%d grpc=%v", c.BizCode(), c.GRPCCode())
+	}
+	// 业务码以纯值注册过（RegisterErrCodeMap 注册 proto 枚举）时，composite 能拆出名字
+	RegisterErrCode(3001, "CustomBiz")
+	if c.String() != "CustomBiz" {
+		t.Fatalf("composite String=%q", c.String())
+	}
+	// 纯 gRPC 错误：BizCode 为 0，GRPCCode 为自身
+	if NotFound.BizCode() != 0 || NotFound.GRPCCode() != codes.NotFound {
+		t.Fatal("pure grpc code layout")
+	}
+	// 未注册的 composite 保留完整码信息
+	if (ErrCode(3999)*100 + ErrCode(codes.NotFound)).String() != "Unknown Error, Code:"+strconv.Itoa(3999*100+5) {
+		t.Fatalf("unregistered String=%q", (ErrCode(3999)*100 + ErrCode(codes.NotFound)).String())
+	}
+}
+
 func TestErrCode_GRPCStatus(t *testing.T) {
 	st := InvalidArgument.GRPCStatus()
 	if st.Code().String() != "InvalidArgument" {
 		t.Fatalf("grpc code=%v", st.Code())
 	}
-	if st.Message() != "InvalidArgument" {
+	// msg 携带 composite 整值，纯 gRPC 错误时即 code 自身
+	if st.Message() != "3" {
 		t.Fatalf("grpc message=%q", st.Message())
 	}
-	custom := ErrCode(1001)
+	// 业务码不再被当成非法 gRPC code 发出去
+	custom := ErrCode(1001)*100 + ErrCode(codes.InvalidArgument)
 	st2 := custom.GRPCStatus()
-	if int(st2.Code()) != 1001 {
-		t.Fatalf("custom grpc code=%d", st2.Code())
+	if st2.Code() != codes.InvalidArgument {
+		t.Fatalf("custom grpc code=%v", st2.Code())
+	}
+	if st2.Message() != strconv.Itoa(int(custom)) {
+		t.Fatalf("custom grpc message=%q", st2.Message())
 	}
 }
 
@@ -103,8 +130,8 @@ func TestStatusFromErrCode_AndRespondHeaders(t *testing.T) {
 	if rec.Header().Get(httpx.HeaderErrorCode) != "5" {
 		t.Fatalf("Error-Code=%q", rec.Header().Get(httpx.HeaderErrorCode))
 	}
-	if rec.Header().Get(httpx.HeaderErrorMsg) != "missing" {
-		t.Fatalf("Error-Msg=%q", rec.Header().Get(httpx.HeaderErrorMsg))
+	if rec.Header().Get(httpx.HeaderErrorMsg) != "" || rec.Header().Get(httpx.HeaderGrpcStatus) != "" {
+		t.Fatal("only Error-Code header expected")
 	}
 }
 
@@ -117,11 +144,21 @@ func TestErrResp_RespondAlwaysWritesHeaders(t *testing.T) {
 	if rec.Header().Get(httpx.HeaderErrorCode) != "5" {
 		t.Fatalf("Error-Code=%q", rec.Header().Get(httpx.HeaderErrorCode))
 	}
-	if rec.Header().Get(httpx.HeaderErrorMsg) != "auth.err.missing" {
-		t.Fatalf("Error-Msg=%q", rec.Header().Get(httpx.HeaderErrorMsg))
+	// 只写 Error-Code：msg 走响应体（JSON msg / ErrorInfo.reason）。
+	if rec.Header().Get(httpx.HeaderErrorMsg) != "" || rec.Header().Get(httpx.HeaderGrpcStatus) != "" {
+		t.Fatal("only Error-Code header expected")
 	}
-	if rec.Header().Get(httpx.HeaderGrpcStatus) != "5" {
-		t.Fatalf("Grpc-Status=%q", rec.Header().Get(httpx.HeaderGrpcStatus))
+	// composite：Error-Code 整值，msg 仍在 body
+	rec2 := httptest.NewRecorder()
+	resp2 := NewErrResp(ErrCode(1001)*100+ErrCode(codes.PermissionDenied), "auth.err.missing", nil)
+	if _, err := resp2.Respond(t.Context(), rec2); err != nil {
+		t.Fatal(err)
+	}
+	if rec2.Header().Get(httpx.HeaderErrorCode) != strconv.Itoa(1001*100+7) {
+		t.Fatalf("composite Error-Code=%q", rec2.Header().Get(httpx.HeaderErrorCode))
+	}
+	if rec2.Header().Get(httpx.HeaderGrpcStatus) != "" {
+		t.Fatalf("composite Grpc-Status=%q", rec2.Header().Get(httpx.HeaderGrpcStatus))
 	}
 }
 

@@ -214,11 +214,6 @@ func (s *Server) Init() {
 		if len(s.Cors.ExposedHeaders) == 0 {
 			s.Cors.ExposedHeaders = []string{
 				httpx.HeaderErrorCode,
-				httpx.HeaderErrorMsg,
-				httpx.HeaderErrorMessage,
-				httpx.HeaderGrpcStatus,
-				httpx.HeaderGrpcMessage,
-				httpx.HeaderGrpcMsg,
 			}
 		}
 	}

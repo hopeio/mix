@@ -22,7 +22,6 @@ import (
 	httpx "github.com/hopeio/gox/net/http"
 	strings "github.com/hopeio/gox/strings"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -58,19 +57,14 @@ type headerSetter interface {
 	Set(key, value string)
 }
 
-// WriteErrHeaders 在业务错误时写入 Error-Code / Grpc-Status 以及 i18n key
-// （Error-Msg / Grpc-Message）。HTTP protobuf 客户端靠这些头判断是否出错。
-func WriteErrHeaders(h headerSetter, code ErrCode, msg string) {
+// WriteErrHeaders 在业务错误时只写 Error-Code 头（composite 整值：
+// 业务码*100+gRPC code），HTTP 客户端靠它判断是否出错；msg/i18n 变量一律
+// 走响应体（protobuf 的 ErrorInfo 或 JSON 的 msg/data）。
+func WriteErrHeaders(h headerSetter, code ErrCode) {
 	if h == nil || code == Success {
 		return
 	}
-	cs := strconv.Itoa(int(code))
-	h.Set(httpx.HeaderErrorCode, cs)
-	h.Set(httpx.HeaderGrpcStatus, cs)
-	if msg != "" {
-		h.Set(httpx.HeaderErrorMsg, msg)
-		h.Set(httpx.HeaderGrpcMessage, msg)
-	}
+	h.Set(httpx.HeaderErrorCode, strconv.Itoa(int(code)))
 }
 
 func StatusFromErrCode(code ErrCode) int {
@@ -99,11 +93,11 @@ func (res *CommonResp[T]) Respond(ctx context.Context, w http.ResponseWriter) (i
 	}
 	if wx, ok := w.(ResponseWriter); ok {
 		header := wx.HeaderX()
-		WriteErrHeaders(header, res.Code, res.Msg)
+		WriteErrHeaders(header, res.Code)
 		header.Set(httpx.HeaderContentType, contentType)
 	} else {
 		header := w.Header()
-		WriteErrHeaders(header, res.Code, res.Msg)
+		WriteErrHeaders(header, res.Code)
 		header.Set(httpx.HeaderContentType, contentType)
 	}
 
@@ -315,12 +309,26 @@ func ErrRespFrom(err error) *ErrResp {
 		return se.ErrResp()
 	}
 	if st, ok := status.FromError(err); ok {
-		er := NewErrResp(ErrCode(st.Code()), st.Message(), nil)
+		er := &ErrResp{}
+		// msg 就是 composite 整值（业务码*100+gRPC code），直接还原。
+		if c, perr := strconv.ParseInt(st.Message(), 10, 32); perr == nil {
+			er.Code = ErrCode(c)
+		} else {
+			er.Code = ErrCode(st.Code())
+		}
 		for _, d := range st.Details() {
-			if ei, ok := d.(*errdetails.ErrorInfo); ok && len(ei.Metadata) > 0 {
-				er.Data = ei.Metadata
+			if ei, ok := d.(*errdetails.ErrorInfo); ok {
+				if ei.Reason != "" {
+					er.Msg = ei.Reason
+				}
+				if len(ei.Metadata) > 0 {
+					er.Data = ei.Metadata
+				}
 				break
 			}
+		}
+		if er.Msg == "" {
+			er.Msg = st.Message()
 		}
 		return er
 	}
@@ -343,11 +351,11 @@ func (res *ErrResp) Respond(ctx context.Context, w http.ResponseWriter) (int, er
 	data, contentType, _ := DefaultMarshal(ctx, res)
 	if wx, ok := w.(ResponseWriter); ok {
 		header := wx.HeaderX()
-		WriteErrHeaders(header, res.Code, res.Msg)
+		WriteErrHeaders(header, res.Code)
 		header.Set(httpx.HeaderContentType, contentType)
 	} else {
 		header := w.Header()
-		WriteErrHeaders(header, res.Code, res.Msg)
+		WriteErrHeaders(header, res.Code)
 		header.Set(httpx.HeaderContentType, contentType)
 	}
 	if res.Code != Success {
@@ -364,11 +372,12 @@ func (res *ErrResp) ErrResp() *ErrResp {
 }
 
 func (x *ErrResp) GRPCStatus() *status.Status {
-	st := status.New(codes.Code(x.Code), x.Msg)
-	// data 是 msg i18n 词条的 {k} 占位符变量；code/msg 已在 status 本身，
-	// 变量放进标准 google.rpc.ErrorInfo 的 metadata——它是 gRPC 错误详情的
-	// 标准类型，grpc-go/grpc-dart 客户端都会自动解码，无需手写 wire。
-	if len(x.Data) > 0 {
+	// code 用低两位（<100）标准枚举（保证合法）；msg 放 composite 整值，客户端按数字
+	// 还原业务码。i18n key 与 {k} 占位符变量放进标准 google.rpc.ErrorInfo 的
+	// reason/metadata——它是 gRPC 错误详情的标准类型，grpc-go/grpc-dart 客户端
+	// 都会自动解码，无需手写 wire。
+	st := status.New(x.Code.GRPCCode(), strconv.Itoa(int(x.Code)))
+	if x.Msg != "" || len(x.Data) > 0 {
 		if st2, err := st.WithDetails(x.ErrorInfo()); err == nil {
 			return st2
 		}
