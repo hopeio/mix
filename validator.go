@@ -9,10 +9,14 @@ package mix
 import (
 	"errors"
 	"reflect"
+	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/go-playground/validator/v10"
 )
+
+var i18nKeyPattern = regexp.MustCompile(`^[a-z][\w-]*(\.[\w-]+)+$`)
 
 var DefaultValidate *validator.Validate
 
@@ -23,13 +27,32 @@ func init() {
 }
 
 func fieldNameForValidate(sf reflect.StructField) string {
-	if json := sf.Tag.Get("json"); json != "" && json != "-" {
-		if idx := strings.IndexByte(json, ','); idx >= 0 {
-			return json[:idx]
-		}
-		return json
+	if comment := strings.TrimSpace(sf.Tag.Get("comment")); comment != "" && i18nKeyPattern.MatchString(comment) {
+		return comment
 	}
-	return sf.Name
+	return "field." + jsonFieldName(sf)
+}
+
+func jsonFieldName(sf reflect.StructField) string {
+	if json := sf.Tag.Get("json"); json != "" && json != "-" {
+		name := json
+		if idx := strings.IndexByte(name, ','); idx >= 0 {
+			name = name[:idx]
+		}
+		if name != "" {
+			return name
+		}
+	}
+	return lowerFirstRune(sf.Name)
+}
+
+func lowerFirstRune(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToLower(r[0])
+	return string(r)
 }
 
 // Validator is implemented by proto-generated Validate() methods.

@@ -8,6 +8,7 @@ package mix
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -23,8 +24,8 @@ func TestValidateStruct(t *testing.T) {
 		t.Fatal("ValidateStruct() should return error for invalid struct")
 	}
 	er := ErrRespFrom(err)
-	if er.Msg != "validator.required" || er.Data["field"] != "name" {
-		t.Fatalf("ValidateStruct() = %+v, want validator.required on name", er)
+	if er.Msg != "validator.required" || er.Data["field"] != "field.name" {
+		t.Fatalf("ValidateStruct() = %+v, want validator.required on field.name", er)
 	}
 }
 
@@ -79,7 +80,24 @@ func TestValidateStruct_MinTag(t *testing.T) {
 		t.Fatal("expected min validation error")
 	}
 	er := ErrRespFrom(err)
-	if er.Msg != "validator.min" || er.Data["field"] != "age" || er.Data["min"] != "1" {
-		t.Fatalf("ValidateStruct() = %+v, want validator.min on age", er)
+	if er.Msg != "validator.min" || er.Data["field"] != "field.age" || er.Data["min"] != "1" {
+		t.Fatalf("ValidateStruct() = %+v, want validator.min on field.age", er)
+	}
+}
+
+func TestFieldNameForValidate(t *testing.T) {
+	type tagged struct {
+		Password string `json:"password" comment:"密码"`
+		Label    string `json:"label" comment:"auth.password"`
+		Bare     string
+	}
+	if got := fieldNameForValidate(reflect.TypeOf(tagged{}).Field(0)); got != "field.password" {
+		t.Fatalf("password = %q, want field.password", got)
+	}
+	if got := fieldNameForValidate(reflect.TypeOf(tagged{}).Field(1)); got != "auth.password" {
+		t.Fatalf("label = %q, want auth.password", got)
+	}
+	if got := fieldNameForValidate(reflect.TypeOf(tagged{}).Field(2)); got != "field.bare" {
+		t.Fatalf("bare = %q, want field.bare", got)
 	}
 }
