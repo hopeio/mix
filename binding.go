@@ -28,9 +28,9 @@ import (
 
 var (
 	DefaultMemory int64 = 32 << 20
-	CommonTag           = "json"
 	Validate            = ValidateStruct
-	defaultTags         = []string{"uri", "path", "query", "header", "form", CommonTag}
+	commonTag           = "json"
+	defaultTags         = []string{"uri", "path", "query", "header", "form", commonTag}
 )
 
 type Source interface {
@@ -61,6 +61,11 @@ type Binder interface {
 
 type CommonBinder interface {
 	Bind(r Source, v any) error
+}
+
+func BindTag(tag string)  {
+	 commonTag = tag
+	 defaultTags[len(defaultTags)-1] = commonTag
 }
 
 func Bind(r *http.Request, v any) error {
@@ -152,7 +157,7 @@ func CommonBind(s Source, v any) error {
 					setter = headerSetter
 				case "form":
 					setter = multipartFormSetter
-				case CommonTag:
+				case commonTag:
 					setter = commonSetter
 				}
 				if setter == nil {
@@ -198,7 +203,7 @@ func CommonBind(s Source, v any) error {
 					setter = multipartFormSetter
 				case "header":
 					setter = headerSetter
-				case CommonTag:
+				case commonTag:
 					setter = commonSetter
 				}
 
