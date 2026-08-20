@@ -21,16 +21,15 @@ import (
 	"sync"
 
 	iox "github.com/hopeio/gox/io"
-	stringsx "github.com/hopeio/gox/strings"
 	"github.com/hopeio/gox/kvstruct"
-	"github.com/hopeio/gox/validator"
 	httpx "github.com/hopeio/gox/net/http"
+	stringsx "github.com/hopeio/gox/strings"
 )
 
 var (
 	DefaultMemory int64 = 32 << 20
 	CommonTag           = "json"
-	Validate            = validator.ValidateStruct
+	Validate            = ValidateStruct
 	defaultTags         = []string{"uri", "path", "query", "header", "form", CommonTag}
 )
 

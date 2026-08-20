@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/hopeio/gox/log"
-	"github.com/hopeio/gox/validator"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -96,7 +95,7 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 	if !ok {
 		md.IncomingMD = nil
 	}
-	if err = validator.ValidateStruct(req); err != nil {
+	if err = ValidateStruct(req); err != nil {
 		return nil, err
 	}
 	resp, err = handler(ctx, req)
@@ -224,7 +223,7 @@ func (s *recvWrapper) RecvMsg(m interface{}) error {
 	}
 	// 必须先接收数据再校验，否则校验的是零值结构体
 	s.Request = m
-	if err := validator.ValidateStruct(m); err != nil {
+	if err := ValidateStruct(m); err != nil {
 		return err
 	}
 	return nil
