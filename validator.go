@@ -9,14 +9,11 @@ package mix
 import (
 	"errors"
 	"reflect"
-	"regexp"
 	"strings"
 	"unicode"
 
 	"github.com/go-playground/validator/v10"
 )
-
-var i18nKeyPattern = regexp.MustCompile(`^[a-z][\w-]*(\.[\w-]+)+$`)
 
 var DefaultValidate *validator.Validate
 
@@ -27,8 +24,8 @@ func init() {
 }
 
 func fieldNameForValidate(sf reflect.StructField) string {
-	if comment := strings.TrimSpace(sf.Tag.Get("comment")); comment != "" && i18nKeyPattern.MatchString(comment) {
-		return comment
+	if key := strings.TrimSpace(sf.Tag.Get("i18nkey")); key != "" {
+		return key
 	}
 	return "field." + jsonFieldName(sf)
 }
