@@ -24,7 +24,7 @@ func TestErrCode_StringAndHelpers(t *testing.T) {
 		t.Fatalf("Msg helper: %+v", er)
 	}
 	er2 := Internal.Wrap(errors.New("boom"))
-	if er2.Code != Internal || er2.Msg != "boom" {
+	if er2.Code != Internal || er2.Msg != "Internal" {
 		t.Fatalf("Wrap: %+v", er2)
 	}
 }
@@ -104,7 +104,7 @@ func TestErrRespFrom(t *testing.T) {
 		t.Fatalf("ErrCode path: %+v", via)
 	}
 	via2 := ErrRespFrom(errors.New("plain"))
-	if via2.Code != Unknown || via2.Msg != "plain" {
+	if via2.Code != Internal || via2.Msg != "Internal" {
 		t.Fatalf("plain error: %+v", via2)
 	}
 }

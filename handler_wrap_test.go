@@ -210,7 +210,7 @@ func TestHandlerWrapCommon_PlainError(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	er := parseWrappedErrResp(t, rec.Body.Bytes())
-	if er.Code != Unknown || er.Msg != "plain failure" {
+	if er.Code != Internal || er.Msg != "Internal" {
 		t.Fatalf("err resp=%+v", er)
 	}
 }

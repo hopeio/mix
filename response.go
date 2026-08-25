@@ -328,19 +328,23 @@ func ErrRespFrom(err error) *ErrResp {
 			}
 		}
 		if er.Msg == "" {
-			er.Msg = st.Message()
+			// 无 ErrorInfo 时用注册名；不要把 status.Message（可能是驱动原文）下发。
+			er.Msg = er.Code.String()
 		}
 		return er
 	}
 	rv := reflect.ValueOf(err)
 	kind := rv.Kind()
 	if kind >= reflect.Int && kind <= reflect.Int64 {
-		return NewErrResp(ErrCode(rv.Int()), err.Error(), nil)
+		c := ErrCode(rv.Int())
+		return NewErrResp(c, c.String(), nil)
 	}
 	if kind >= reflect.Uint && kind <= reflect.Uint64 {
-		return NewErrResp(ErrCode(rv.Uint()), err.Error(), nil)
+		c := ErrCode(rv.Uint())
+		return NewErrResp(c, c.String(), nil)
 	}
-	return NewErrResp(Unknown, err.Error(), nil)
+	// 未类型化错误（驱动原文）：不下发 err.Error()。
+	return NewErrResp(Internal, Internal.String(), nil)
 }
 
 func (res *ErrResp) ServeHTTP(w http.ResponseWriter, r *http.Request) {

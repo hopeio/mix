@@ -102,7 +102,10 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 
 	if err != nil {
 		if _, ok := err.(GRPCStatus); !ok {
-			err = status.Error(codes.Unknown, err.Error())
+			log.Errorw("untyped grpc handler error",
+				zap.String("method", info.FullMethod),
+				zap.Error(err))
+			err = Internal.ErrResp()
 		}
 	}
 
@@ -189,7 +192,10 @@ func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *g
 	err = handler(srv, wrapper)
 	if err != nil {
 		if _, ok := err.(GRPCStatus); !ok {
-			err = status.Error(codes.Unknown, err.Error())
+			log.Errorw("untyped grpc stream handler error",
+				zap.String("method", info.FullMethod),
+				zap.Error(err))
+			err = Internal.ErrResp()
 		}
 	}
 

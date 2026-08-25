@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/hopeio/gox/log"
 	"github.com/hopeio/gox/types"
+	"go.uber.org/zap"
 )
 
 type Service[REQ, RESP any] func(ctx ReqResp, req REQ) (RESP, *ErrResp)
@@ -62,6 +64,9 @@ func HandlerWrapCommon[REQ, RESP any](service types.Service[*REQ, *RESP]) http.H
 		}
 		res, err := service(WrapContext(ReqResp{r, w}), req)
 		if err != nil {
+			if _, ok := err.(GRPCStatus); !ok {
+				log.Errorw("untyped http handler error", zap.Error(err))
+			}
 			ErrRespFrom(err).ServeHTTP(w, r)
 			return
 		}
