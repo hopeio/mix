@@ -94,6 +94,9 @@ var HandleError = func(w http.ResponseWriter, r *http.Request, err error) {
 	if recorder, ok := ow.(httpx.RecordBodyer); ok {
 		recorder.RecordBody(buf, s)
 	}
+	// 必须先 WriteHeader：业务错默认仍是 200（靠 Error-Code 区分），
+	// 但不写的话 recorder.StatusCode 会停在 0，access log 失真。
+	w.WriteHeader(mix.StatusFromErrCode(s.Code))
 	if _, err := w.Write(buf); err != nil {
 		grpclog.Infof("Failed to write response: %v", err)
 	}
