@@ -15,7 +15,6 @@ import (
 	httpx "github.com/hopeio/gox/net/http"
 	stringsx "github.com/hopeio/gox/strings"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/status"
 )
 
 const (
