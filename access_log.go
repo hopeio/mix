@@ -103,7 +103,7 @@ func DefaultGrpcAccessLog(ctx context.Context, param *GrpcAccessLogParam) {
 	if param.Err != nil {
 		s, _ := status.FromError(param.Err)
 		codeField = zap.Int32("code", int32(s.Code()))
-		respBodyField = zap.String("response", s.Message())
+		respBodyField = zap.String("response", s.String())
 	} else {
 		respBodyField = zap.String("response", safeStringer(param.Response))
 	}
