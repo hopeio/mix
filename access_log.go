@@ -99,11 +99,9 @@ type GrpcAccessLog = func(ctx context.Context, param *GrpcAccessLogParam)
 
 func DefaultGrpcAccessLog(ctx context.Context, param *GrpcAccessLogParam) {
 	respBodyField := zap.Skip()
-	codeField := zap.Int32("code", 0)
+	errField := zap.Skip()
 	if param.Err != nil {
-		s, _ := status.FromError(param.Err)
-		codeField = zap.Int32("code", int32(s.Code()))
-		respBodyField = zap.String("response", s.String())
+		errField = zap.Error(param.Err)
 	} else {
 		respBodyField = zap.String("response", safeStringer(param.Response))
 	}
@@ -115,7 +113,7 @@ func DefaultGrpcAccessLog(ctx context.Context, param *GrpcAccessLogParam) {
 			zap.String("body", safeStringer(param.Request)),
 			log.Context(ctx),
 			zap.Duration("duration", ce.Time.Sub(param.Metadata.RequestAt)),
-			codeField,
+			errField,
 			respBodyField)
 	}
 }
