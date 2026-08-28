@@ -147,7 +147,7 @@ func ProtobufMarshal(ctx context.Context, v any) ([]byte, string, error) {
 		if err != nil {
 			return data, httpx.ContentTypeText, err
 		}
-		return data, httpx.ContentTypeXProtobuf, nil
+		return data, httpx.ContentTypeProtobuf, nil
 	case error:
 		return ProtobufMarshal(ctx, mix.ErrRespFrom(msg))
 	case proto.Message:
@@ -155,7 +155,7 @@ func ProtobufMarshal(ctx context.Context, v any) ([]byte, string, error) {
 		if err != nil {
 			return data, httpx.ContentTypeText, err
 		}
-		return data, httpx.ContentTypeXProtobuf, nil
+		return data, httpx.ContentTypeProtobuf, nil
 	}
 	return JsonMarshal(ctx, v)
 }

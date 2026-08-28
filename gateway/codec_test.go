@@ -15,7 +15,7 @@ func TestProtobufMarshal_ErrRespErrorInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ct != httpx.ContentTypeXProtobuf {
+	if ct != httpx.ContentTypeProtobuf {
 		t.Fatalf("content-type=%q", ct)
 	}
 	var ei errdetails.ErrorInfo
