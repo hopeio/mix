@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hopeio/gox/log"
+	httpx "github.com/hopeio/gox/net/http"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -27,6 +28,7 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/status"
 )
@@ -52,7 +54,22 @@ func (s *Server) grpcHandler() *grpc.Server {
 						propagation.TraceContext{},
 						opentelemetry.GRPCTraceBinPropagator{},
 						propagation.Baggage{},
-					))}, s.Otel.OtelgrpcOpts...)...)))
+					)),
+					// Treat calls WITHOUT the internal-only "Grpc-Internal" metadata
+					// header as public (untrusted) endpoints: start a fresh root span
+					// instead of inheriting the client trace, and link the client's
+					// span context for correlation. Internal service-to-service calls
+					// carry Grpc-Internal (see gox httpx.HeaderGrpcInternal) and are
+					// trusted — their traceparent is inherited normally.
+					otelgrpc.WithPublicEndpointFn(func(ctx context.Context, _ *stats.RPCTagInfo) bool {
+						md, ok := metadata.FromIncomingContext(ctx)
+						if !ok {
+							return true
+						}
+						_, trusted := md[httpx.HeaderGrpcInternal]
+						return !trusted
+					}),
+				}, s.Otel.OtelgrpcOpts...)...)))
 		}
 		stream = append(stream, s.StreamAccess)
 		stream = append(stream, s.Grpc.StreamServerInterceptors...)
