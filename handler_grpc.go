@@ -66,8 +66,9 @@ func (s *Server) grpcHandler() *grpc.Server {
 						if !ok {
 							return true
 						}
-						_, trusted := md[httpx.HeaderGrpcInternal]
-						return !trusted
+						// md.Get lowercases the key; never index MD with mixed-case HeaderGrpcInternal.
+						vals := md.Get(httpx.HeaderGrpcInternal)
+						return len(vals) == 0 || vals[0] == ""
 					}),
 				}, s.Otel.OtelgrpcOpts...)...)))
 		}
