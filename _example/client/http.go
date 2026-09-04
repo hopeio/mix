@@ -99,10 +99,9 @@ func sendGRPCRequest() {
 
 	fmt.Printf("Response: %v\n", &response)
 
-	// 检查 gRPC 状态（在 trailers 中）
-	grpcStatus := resp.Trailer.Get("Grpc-Status")
-	if grpcStatus != "" && grpcStatus != "0" {
-		grpcMessage := resp.Trailer.Get("Grpc-Message")
-		fmt.Printf("gRPC error: %s - %s\n", grpcStatus, grpcMessage)
+	// Check stream status in HTTP trailers (Error-Code; same as unary HTTP).
+	errCode := resp.Trailer.Get("Error-Code")
+	if errCode != "" && errCode != "0" {
+		fmt.Printf("HTTP stream error: Error-Code=%s\n", errCode)
 	}
 }

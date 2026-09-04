@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/hopeio/mix"
 	"google.golang.org/grpc"
@@ -46,9 +47,14 @@ func ServerSideStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr m
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](w, r)
 		stream.forServerSendOnly()
 
-		defer FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
+		defer func() {
+			FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
+		}()
 		if err = gprcHanlder(&req, any(stream).(S)); err != nil {
-			HandleError(w, r, err)
+			// 流已开写：只能靠 trailer 的 Error-Code，不能再写一元错误体。
+			if !stream.Status() {
+				HandleError(w, r, err)
+			}
 			return
 		}
 	})
@@ -71,15 +77,28 @@ func BidiStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.Pro
 		var err error
 
 		stream := NewServerStream[Req, Resp, ReqPtr, RespPtr](w, r)
-		defer FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
+		defer func() {
+			FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
+		}()
 		if err = gprcHanlder(any(stream).(S)); err != nil {
-			HandleError(w, r, err)
+			if !stream.Status() {
+				HandleError(w, r, err)
+			}
 			return
 		}
 	})
 }
 
 // NewMetadataContext 设置 incoming
+//
+// 必须显式小写化键，而不是 metadata.MD(header) 直接转换：后者保留 net/http 的
+// 规范化写法（如 "X-Internal-Auth"），而真实 gRPC 链路上的键是小写的
+// （"x-internal-auth"）。不小写化的话，同一份 md.Get 代码在 HTTP 网关路径
+// 与真实 gRPC 路径上会一边命中一边漏判。
 func NewMetadataContext(ctx context.Context, header http.Header) context.Context {
-	return metadata.NewIncomingContext(ctx, metadata.MD(header))
+	md := make(metadata.MD, len(header))
+	for k, vals := range header {
+		md[strings.ToLower(k)] = append(md[strings.ToLower(k)], vals...)
+	}
+	return metadata.NewIncomingContext(ctx, md)
 }

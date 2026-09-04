@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/textproto"
-	"strconv"
 
 	httpx "github.com/hopeio/gox/net/http"
 	"github.com/hopeio/mix"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -66,16 +64,16 @@ func HandleForwardResponseTrailer(w http.ResponseWriter, md metadata.MD) {
 	}
 }
 
-// FinalizeStreamTrailers 在流式响应结束时写出 grpc-status / grpc-message 及自定义 trailer metadata。
+// FinalizeStreamTrailers 在 HTTP 流式响应结束时写出 Error-Code trailer 及自定义 metadata。
+// 流已开写后不能再改响应头，状态只能走 trailer；与一元 HTTP 一样只用 Error-Code。
 func FinalizeStreamTrailers(w http.ResponseWriter, started bool, err error, trailers metadata.MD) {
 	if !started {
 		return
 	}
 	if err != nil {
-		w.Header().Set(httpx.HeaderGrpcStatus, strconv.Itoa(int(status.Code(err))))
-		w.Header().Set(httpx.HeaderGrpcMessage, err.Error())
+		mix.WriteErrHeaders(w.Header(), ErrRespFromError(err).Code)
 	} else {
-		w.Header().Set(httpx.HeaderGrpcStatus, "0")
+		w.Header().Set(httpx.HeaderErrorCode, "0")
 	}
 	HandleForwardResponseTrailer(w, trailers)
 }

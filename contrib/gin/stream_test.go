@@ -65,8 +65,8 @@ func TestClientStreamRecvAndResponse(t *testing.T) {
 		t.Fatal("expected response body written")
 	}
 	res := w.Result()
-	if got := res.Trailer.Get("Grpc-Status"); got != "0" {
-		t.Fatalf("Grpc-Status: got %q want 0", got)
+	if got := res.Trailer.Get("Error-Code"); got != "0" {
+		t.Fatalf("Error-Code: got %q want 0", got)
 	}
 }
 
@@ -91,8 +91,8 @@ func TestServerStreamTrailers(t *testing.T) {
 	stream.FinalizeTrailers(nil)
 
 	res := w.Result()
-	if got := res.Trailer.Get("Grpc-Status"); got != "0" {
-		t.Fatalf("Grpc-Status: got %q want 0", got)
+	if got := res.Trailer.Get("Error-Code"); got != "0" {
+		t.Fatalf("Error-Code: got %q want 0", got)
 	}
 	if got := res.Trailer.Get("Grpc-Trailer-X-Custom"); got != "hello" {
 		t.Fatalf("custom trailer: got %q want hello", got)
