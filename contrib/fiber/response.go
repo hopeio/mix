@@ -42,7 +42,7 @@ var HttpError = func(ctx fiber.Ctx, err error) {
 	errcodeHeader := strconv.Itoa(int(s.Code))
 	buf, contentType, _ := mix.DefaultMarshal(ctx.RequestCtx(), s)
 	ctx.Set(httpx.HeaderContentType, contentType)
-	ctx.Set(httpx.HeaderErrorCode, errcodeHeader)
+	ctx.Set(mix.HeaderErrorCode, errcodeHeader)
 	if err := ctx.Send(buf); err != nil {
 		grpclog.Infof("Failed to write response: %v", err)
 	}

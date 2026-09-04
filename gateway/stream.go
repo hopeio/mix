@@ -63,7 +63,7 @@ func writeGRPCFrameData(w io.Writer, data []byte) error {
 // BeginGRPCStream declares a chunked HTTP streaming response and trailer field names.
 // HTTP uses Error-Code only (same as unary); native gRPC supplies Grpc-Status itself.
 func BeginGRPCStream(w http.ResponseWriter, trailers metadata.MD) {
-	w.Header().Add(httpx.HeaderTrailer, httpx.HeaderErrorCode)
+	w.Header().Add(httpx.HeaderTrailer, mix.HeaderErrorCode)
 	HandleForwardResponseTrailerHeader(w, trailers)
 	w.Header().Set(httpx.HeaderTransferEncoding, "chunked")
 }

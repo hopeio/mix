@@ -24,6 +24,12 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	HeaderErrorCode    = "Error-Code"
+	HeaderErrorMessage = "Error-Message"
+)
+
+
 // InternalHandler 往内部端口的私有 mux 上注册健康检查、OpenAPI 文档与调试端点
 func (s *Server) InternalHandler(mux *http.ServeMux) {
 	// k8s / 负载均衡标准探针端点
@@ -48,7 +54,7 @@ func (s *Server) httpHandler() http.Handler {
 			if err := recover(); err != nil {
 				log.StackLogger().Errorw(fmt.Sprintf("panic: %v", err))
 				code := strconv.Itoa(int(Internal))
-				w.Header().Set(httpx.HeaderErrorCode, code)
+				w.Header().Set(HeaderErrorCode, code)
 				se := &ErrResp{Code: Internal, Msg: sysErrMsg}
 				buf, contentType, _ := DefaultMarshal(r.Context(), se)
 				w.Header().Set(httpx.HeaderContentType, contentType)

@@ -64,7 +64,7 @@ func WriteErrHeaders(h headerSetter, code ErrCode) {
 	if h == nil || code == Success {
 		return
 	}
-	h.Set(httpx.HeaderErrorCode, strconv.Itoa(int(code)))
+	h.Set(HeaderErrorCode, strconv.Itoa(int(code)))
 }
 
 func StatusFromErrCode(code ErrCode) int {

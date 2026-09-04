@@ -8,7 +8,7 @@ require (
 	github.com/gofiber/fiber/v3 v3.4.0
 	github.com/grafana/otel-profiling-go v0.6.0
 	github.com/grafana/pyroscope-go v1.4.1
-	github.com/hopeio/gox v1.12.0
+	github.com/hopeio/gox v1.12.1-0.20260904073015-6616f818204d
 	github.com/prometheus/client_golang v1.24.1
 	github.com/quic-go/quic-go v0.61.0
 	github.com/rs/cors v1.11.1

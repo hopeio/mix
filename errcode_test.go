@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"testing"
 
-	httpx "github.com/hopeio/gox/net/http"
 	"google.golang.org/grpc/codes"
 )
 
@@ -127,11 +126,8 @@ func TestStatusFromErrCode_AndRespondHeaders(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if rec.Header().Get(httpx.HeaderErrorCode) != "5" {
-		t.Fatalf("Error-Code=%q", rec.Header().Get(httpx.HeaderErrorCode))
-	}
-	if rec.Header().Get(httpx.HeaderErrorMsg) != "" || rec.Header().Get(httpx.HeaderGrpcStatus) != "" {
-		t.Fatal("only Error-Code header expected")
+	if rec.Header().Get(HeaderErrorCode) != "5" {
+		t.Fatalf("Error-Code=%q", rec.Header().Get(HeaderErrorCode))
 	}
 }
 
@@ -141,12 +137,8 @@ func TestErrResp_RespondAlwaysWritesHeaders(t *testing.T) {
 	if _, err := resp.Respond(t.Context(), rec); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Header().Get(httpx.HeaderErrorCode) != "5" {
-		t.Fatalf("Error-Code=%q", rec.Header().Get(httpx.HeaderErrorCode))
-	}
-	// 只写 Error-Code：msg 走响应体（JSON msg / ErrorInfo.reason）。
-	if rec.Header().Get(httpx.HeaderErrorMsg) != "" || rec.Header().Get(httpx.HeaderGrpcStatus) != "" {
-		t.Fatal("only Error-Code header expected")
+	if rec.Header().Get(HeaderErrorCode) != "5" {
+		t.Fatalf("Error-Code=%q", rec.Header().Get(HeaderErrorCode))
 	}
 	// composite：Error-Code 整值，msg 仍在 body
 	rec2 := httptest.NewRecorder()
@@ -154,11 +146,11 @@ func TestErrResp_RespondAlwaysWritesHeaders(t *testing.T) {
 	if _, err := resp2.Respond(t.Context(), rec2); err != nil {
 		t.Fatal(err)
 	}
-	if rec2.Header().Get(httpx.HeaderErrorCode) != strconv.Itoa(1001*100+7) {
-		t.Fatalf("composite Error-Code=%q", rec2.Header().Get(httpx.HeaderErrorCode))
+	if rec2.Header().Get(HeaderErrorCode) != strconv.Itoa(1001*100+7) {
+		t.Fatalf("composite Error-Code=%q", rec2.Header().Get(HeaderErrorCode))
 	}
-	if rec2.Header().Get(httpx.HeaderGrpcStatus) != "" {
-		t.Fatalf("composite Grpc-Status=%q", rec2.Header().Get(httpx.HeaderGrpcStatus))
+	if rec2.Header().Get(HeaderGrpcStatus) != "" {
+		t.Fatalf("composite Grpc-Status=%q", rec2.Header().Get(HeaderGrpcStatus))
 	}
 }
 

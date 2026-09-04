@@ -100,6 +100,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 h1:5VipnvEpbqr2gA2VbM+nYVbkIF2
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0/go.mod h1:Hyl3n6Twe1hvtd9XUXDec4pTvgMSEixRuQKPTMH2bNs=
 github.com/hopeio/gox v1.12.0 h1:bnUDfhZLBY2BGHjymcs1Y4lAuHZPAEYQX92h2KpODVo=
 github.com/hopeio/gox v1.12.0/go.mod h1:Z8zk/KyzfRgw9QskgelEs+dTg5nx8qa+vOK1oU28YEU=
+github.com/hopeio/gox v1.12.1-0.20260904073015-6616f818204d h1:EUPYsHqVkYysQniZECqqO0Yn9LCZ7AWWHo6WYXQ1BIo=
+github.com/hopeio/gox v1.12.1-0.20260904073015-6616f818204d/go.mod h1:R6eCUYBWyl6DgIlNLef96t1xjzsyajntAb08sSZfBQ0=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/klauspost/compress v1.19.1 h1:VsB4HPswih7mmZ8WleSFQ75c/Ui1M4trX5oAsJnhSlk=

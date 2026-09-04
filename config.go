@@ -8,6 +8,7 @@ package mix
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 type Http3Config struct {
@@ -120,8 +122,36 @@ type OtelConfig struct {
 	// Pyroscope：仅 Enabled=true 时启动；地址可从 ServerAddress 或 PYROSCOPE_SERVER_ADDRESS 补。
 	Pyroscope PyroscopeConfig
 
+	// InternalAuth 标记"可信的内部调用"：入站请求必须同时带上
+	// InternalAuthHeader 头且其值等于 InternalAuthSecret，才被视为内部调用、
+	// 继承其 trace 上下文；否则按公共端点处理（开新根 span + link 客户端 span）。
+	//
+	// 判定必须比对密钥值，只判头是否存在等于任何人都能自称内部。
+	// Secret 为空表示未启用 —— 此时**一律不信任**任何入站调用（安全默认）。
+	InternalAuthHeader string
+	InternalAuthSecret string
+
 	OtelhttpOpts []otelhttp.Option
 	OtelgrpcOpts []otelgrpc.Option
+}
+
+// IsInternalCall reports whether ctx carries the configured internal auth
+// header with the matching secret. Always false when the secret is unset.
+// internalAuthMatch 常量时间比较，避免通过响应时间侧信道逐字节猜密钥。
+func internalAuthMatch(got, want string) bool {
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+}
+
+func (c *OtelConfig) IsInternalCall(ctx context.Context) bool {
+	if c == nil || c.InternalAuthSecret == "" || c.InternalAuthHeader == "" {
+		return false
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false
+	}
+	vals := md.Get(c.InternalAuthHeader)
+	return len(vals) > 0 && internalAuthMatch(vals[0], c.InternalAuthSecret)
 }
 
 // PyroscopeConfig configures grafana/pyroscope-go push client.
@@ -213,7 +243,7 @@ func (s *Server) Init() {
 		}
 		if len(s.Cors.ExposedHeaders) == 0 {
 			s.Cors.ExposedHeaders = []string{
-				httpx.HeaderErrorCode,
+				HeaderErrorCode,
 			}
 		}
 	}

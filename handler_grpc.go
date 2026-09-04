@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/hopeio/gox/log"
-	httpx "github.com/hopeio/gox/net/http"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -32,6 +31,14 @@ import (
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/status"
 )
+
+const (
+	HeaderGrpcTraceBin = "Grpc-Trace-Bin"
+	HeaderGrpcStatus   = "Grpc-Status"
+	HeaderGrpcMsg      = "Grpc-Msg"
+	HeaderGrpcMessage  = "Grpc-Message"
+)
+
 
 type GRPCStatus interface {
 	GRPCStatus() *status.Status
@@ -55,20 +62,14 @@ func (s *Server) grpcHandler() *grpc.Server {
 						opentelemetry.GRPCTraceBinPropagator{},
 						propagation.Baggage{},
 					)),
-					// Treat calls WITHOUT the internal-only "Grpc-Internal" metadata
-					// header as public (untrusted) endpoints: start a fresh root span
-					// instead of inheriting the client trace, and link the client's
-					// span context for correlation. Internal service-to-service calls
-					// carry Grpc-Internal (see gox httpx.HeaderGrpcInternal) and are
-					// trusted — their traceparent is inherited normally.
+					// Treat calls that fail the internal auth check as public
+					// (untrusted) endpoints: start a fresh root span instead of
+					// inheriting the client trace, and link the client's span
+					// context for correlation. Internal service-to-service calls
+					// carry Otel.InternalAuth* (shared secret, see OtelConfig) and
+					// are trusted — their traceparent is inherited normally.
 					otelgrpc.WithPublicEndpointFn(func(ctx context.Context, _ *stats.RPCTagInfo) bool {
-						md, ok := metadata.FromIncomingContext(ctx)
-						if !ok {
-							return true
-						}
-						// md.Get lowercases the key; never index MD with mixed-case HeaderGrpcInternal.
-						vals := md.Get(httpx.HeaderGrpcInternal)
-						return len(vals) == 0 || vals[0] == ""
+						return !s.Otel.IsInternalCall(ctx)
 					}),
 				}, s.Otel.OtelgrpcOpts...)...)))
 		}

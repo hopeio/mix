@@ -73,7 +73,7 @@ func FinalizeStreamTrailers(w http.ResponseWriter, started bool, err error, trai
 	if err != nil {
 		mix.WriteErrHeaders(w.Header(), ErrRespFromError(err).Code)
 	} else {
-		w.Header().Set(httpx.HeaderErrorCode, "0")
+		w.Header().Set(mix.HeaderErrorCode, "0")
 	}
 	HandleForwardResponseTrailer(w, trailers)
 }

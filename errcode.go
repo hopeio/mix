@@ -119,3 +119,4 @@ func (x ErrCode) Error() string {
 func (x ErrCode) GRPCStatus() *status.Status {
 	return status.New(x.GRPCCode(), strconv.Itoa(int(x)))
 }
+

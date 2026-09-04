@@ -18,7 +18,7 @@ var HandleResponseMessage = func(ctx *gin.Context, message proto.Message) error 
 var HttpError = func(ctx *gin.Context, err error) {
 	s := gatewayx.ErrRespFromError(err)
 	delete(ctx.Request.Header, httpx.HeaderTrailer)
-	ctx.Header(httpx.HeaderErrorCode, strconv.Itoa(int(s.Code)))
+	ctx.Header(mix.HeaderErrorCode, strconv.Itoa(int(s.Code)))
 
 	buf, contentType, _ := mix.DefaultMarshal(ctx, s)
 
