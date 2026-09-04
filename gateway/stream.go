@@ -60,8 +60,8 @@ func writeGRPCFrameData(w io.Writer, data []byte) error {
 	return err
 }
 
-// BeginGRPCStream 声明 chunked 流式 HTTP 响应及 trailer 字段名。
-// HTTP 路径只声明 Error-Code（与一元响应一致）；原生 gRPC 的 Grpc-Status 由官方栈自带。
+// BeginGRPCStream declares a chunked HTTP streaming response and trailer field names.
+// HTTP uses Error-Code only (same as unary); native gRPC supplies Grpc-Status itself.
 func BeginGRPCStream(w http.ResponseWriter, trailers metadata.MD) {
 	w.Header().Add(httpx.HeaderTrailer, httpx.HeaderErrorCode)
 	HandleForwardResponseTrailerHeader(w, trailers)

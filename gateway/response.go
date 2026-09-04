@@ -64,8 +64,8 @@ func HandleForwardResponseTrailer(w http.ResponseWriter, md metadata.MD) {
 	}
 }
 
-// FinalizeStreamTrailers 在 HTTP 流式响应结束时写出 Error-Code trailer 及自定义 metadata。
-// 流已开写后不能再改响应头，状态只能走 trailer；与一元 HTTP 一样只用 Error-Code。
+// FinalizeStreamTrailers writes the Error-Code trailer and custom metadata at end of an HTTP stream.
+// Once the body has started, response headers are locked; status must go in trailers (Error-Code only, like unary HTTP).
 func FinalizeStreamTrailers(w http.ResponseWriter, started bool, err error, trailers metadata.MD) {
 	if !started {
 		return
@@ -97,8 +97,8 @@ var HandleError = func(w http.ResponseWriter, r *http.Request, err error) {
 	if recorder, ok := ow.(httpx.RecordBodyer); ok {
 		recorder.RecordBody(buf, s)
 	}
-	// 必须先 WriteHeader：业务错默认仍是 200（靠 Error-Code 区分），
-	// 但不写的话 recorder.StatusCode 会停在 0，access log 失真。
+	// WriteHeader first: business errors often stay HTTP 200 (distinguished by Error-Code);
+	// without it, recorder.StatusCode stays 0 and access logs are wrong.
 	w.WriteHeader(mix.StatusFromErrCode(s.Code))
 	if _, err := w.Write(buf); err != nil {
 		grpclog.Infof("Failed to write response: %v", err)

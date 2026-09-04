@@ -51,7 +51,7 @@ func ServerSideStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr m
 			FinalizeStreamTrailers(w, stream.Status(), err, stream.Trailer())
 		}()
 		if err = gprcHanlder(&req, any(stream).(S)); err != nil {
-			// 流已开写：只能靠 trailer 的 Error-Code，不能再写一元错误体。
+			// Stream already started: status is Error-Code trailer only; do not write a unary error body.
 			if !stream.Status() {
 				HandleError(w, r, err)
 			}
@@ -89,12 +89,12 @@ func BidiStreamCall[Req, Resp any, ReqPtr mix.ProtoMessage[Req], RespPtr mix.Pro
 	})
 }
 
-// NewMetadataContext 设置 incoming
+// NewMetadataContext builds an incoming metadata context from HTTP headers.
 //
-// 必须显式小写化键，而不是 metadata.MD(header) 直接转换：后者保留 net/http 的
-// 规范化写法（如 "X-Internal-Auth"），而真实 gRPC 链路上的键是小写的
-// （"x-internal-auth"）。不小写化的话，同一份 md.Get 代码在 HTTP 网关路径
-// 与真实 gRPC 路径上会一边命中一边漏判。
+// Keys must be lowercased explicitly; casting metadata.MD(header) keeps net/http
+// canonical forms (e.g. "X-Internal-Auth"), while real gRPC metadata keys are
+// lowercase ("x-internal-auth"). Without lowercasing, the same md.Get checks hit
+// on the native gRPC path and miss on the HTTP gateway path.
 func NewMetadataContext(ctx context.Context, header http.Header) context.Context {
 	md := make(metadata.MD, len(header))
 	for k, vals := range header {
