@@ -81,6 +81,11 @@ func FinalizeStreamTrailers(w http.ResponseWriter, started bool, err error, trai
 }
 
 var HandleError = func(w http.ResponseWriter, r *http.Request, err error) {
+	// Client already gone: writing an error body only triggers cancel races
+	// (and otel/net/http "superfluous WriteHeader" noise).
+	if r != nil && r.Context().Err() != nil {
+		return
+	}
 	s := ErrRespFromError(err)
 	delete(r.Header, httpx.HeaderTrailer)
 	buf, contentType, _ := mix.DefaultMarshal(r.Context(), s)
