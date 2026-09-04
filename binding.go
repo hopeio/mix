@@ -128,14 +128,13 @@ func CommonBind(s Source, v any) error {
 			if len(data) == 0 {
 				return nil
 			}
-			err := DefaultUnmarshal(ctx, contentType, data, v)
-			if err != nil {
+			if err := DefaultUnmarshal(ctx, contentType, data, v); err != nil {
 				return err
 			}
 			if recorder, ok := body.(httpx.RecordBodyer); ok {
 				recorder.RecordBody(data, v)
 			}
-			return DefaultUnmarshal(ctx, contentType, data, v)
+			return nil
 		}
 
 	}
