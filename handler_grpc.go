@@ -66,10 +66,10 @@ func (s *Server) grpcHandler() *grpc.Server {
 					// (untrusted) endpoints: start a fresh root span instead of
 					// inheriting the client trace, and link the client's span
 					// context for correlation. Internal service-to-service calls
-					// carry Otel.InternalAuth* (shared secret, see OtelConfig) and
-					// are trusted — their traceparent is inherited normally.
+					// carry Server.InternalAuth* (shared secret) and are trusted —
+					// their traceparent is inherited normally.
 					otelgrpc.WithPublicEndpointFn(func(ctx context.Context, _ *stats.RPCTagInfo) bool {
-						return !s.Otel.IsInternalCall(ctx)
+						return !s.IsInternalCall(ctx)
 					}),
 				}, s.Otel.OtelgrpcOpts...)...)))
 		}

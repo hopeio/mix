@@ -60,6 +60,14 @@ type Server struct {
 	GrpcHandler    func(*grpc.Server)
 	// DisableInternalServer 关闭内部端口（健康检查/OpenAPI/调试端点）
 	DisableInternalServer bool
+
+	// InternalAuth: trust boundary for service-to-service calls.
+	// Inbound must carry InternalAuthHeader equal to the live secret (presence-only
+	// is forgeable). Empty secret = trust nothing.
+	// Empty InternalAuthHeader → DefaultInternalAuthHeader ("X-Internal-Auth").
+	InternalAuthHeader string
+	// InternalAuthSecret from [Server] / env INTERNAL_AUTH_SECRET (zero = "").
+	InternalAuthSecret string `init:"env:INTERNAL_AUTH_SECRET"`
 }
 
 type DebugConfig struct {
@@ -123,42 +131,43 @@ type OtelConfig struct {
 	// Pyroscope：仅 Enabled=true 时启动；地址可从 ServerAddress 或 PYROSCOPE_SERVER_ADDRESS 补。
 	Pyroscope PyroscopeConfig
 
-	// InternalAuth marks a trusted internal call: the inbound request must
-	// carry InternalAuthHeader whose value equals the live secret (see
-	// InternalAuthSecret / InternalAuthSecretFn). Presence-only checks are
-	// forgeable. Empty secret = trust nothing (safe default).
-	InternalAuthHeader string
-	InternalAuthSecret string
-	// InternalAuthSecretFn, when set, is preferred over InternalAuthSecret so
-	// hot-reloaded config stays in sync with business IsInternalCall checks.
-	InternalAuthSecretFn func() string
-
 	OtelhttpOpts []otelhttp.Option
 	OtelgrpcOpts []otelgrpc.Option
 }
+
+// DefaultInternalAuthHeader is used when Server.InternalAuthHeader is empty.
+// HTTP canonicalizes to "X-Internal-Auth"; gRPC metadata keys are lowercase.
+const DefaultInternalAuthHeader = "X-Internal-Auth"
 
 // internalAuthMatch is a constant-time compare to avoid timing side channels.
 func internalAuthMatch(got, want string) bool {
 	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 
-func (c *OtelConfig) internalAuthSecret() string {
-	if c == nil {
+func (s *Server) internalAuthSecret() string {
+	if s == nil {
 		return ""
 	}
-	if c.InternalAuthSecretFn != nil {
-		return strings.TrimSpace(c.InternalAuthSecretFn())
+	return strings.TrimSpace(s.InternalAuthSecret)
+}
+
+func (s *Server) internalAuthHeader() string {
+	if s != nil {
+		if h := strings.TrimSpace(s.InternalAuthHeader); h != "" {
+			return h
+		}
 	}
-	return strings.TrimSpace(c.InternalAuthSecret)
+	return DefaultInternalAuthHeader
 }
 
 // IsInternalCall reports whether ctx carries the configured internal auth
-// header with the matching secret. Always false when the secret is unset.
-func (c *OtelConfig) IsInternalCall(ctx context.Context) bool {
-	if c == nil || c.InternalAuthHeader == "" {
+// header with the matching secret (gRPC incoming metadata). Always false
+// when the secret is unset.
+func (s *Server) IsInternalCall(ctx context.Context) bool {
+	if s == nil {
 		return false
 	}
-	secret := c.internalAuthSecret()
+	secret := s.internalAuthSecret()
 	if secret == "" {
 		return false
 	}
@@ -166,11 +175,25 @@ func (c *OtelConfig) IsInternalCall(ctx context.Context) bool {
 	if !ok {
 		return false
 	}
-	vals := md.Get(c.InternalAuthHeader)
+	vals := md.Get(s.internalAuthHeader())
 	if len(vals) == 0 {
 		return false
 	}
 	return internalAuthMatch(strings.TrimSpace(vals[0]), secret)
+}
+
+// IsInternalHTTPRequest reports whether the HTTP request carries the configured
+// internal auth header with the matching secret. Always false when unset.
+func (s *Server) IsInternalHTTPRequest(r *http.Request) bool {
+	if s == nil || r == nil {
+		return false
+	}
+	secret := s.internalAuthSecret()
+	if secret == "" {
+		return false
+	}
+	got := strings.TrimSpace(r.Header.Get(s.internalAuthHeader()))
+	return got != "" && internalAuthMatch(got, secret)
 }
 
 // PyroscopeConfig configures grafana/pyroscope-go push client.
