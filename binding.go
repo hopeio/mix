@@ -98,7 +98,7 @@ func CommonBind(s Source, v any) error {
 
 			vs, err := url.ParseQuery(stringsx.FromBytes(data))
 			if err != nil {
-				return nil
+				return InvalidArgument.Wrap(err)
 			}
 			if recorder, ok := body.(httpx.RecordBodyer); ok {
 				recorder.RecordBody(data, nil)
@@ -107,11 +107,11 @@ func CommonBind(s Source, v any) error {
 		} else if strings.HasPrefix(contentType, httpx.ContentTypeMultipart) {
 			mr, err := multipartReader(true, contentType, body)
 			if err != nil {
-				return nil
+				return InvalidArgument.Wrap(err)
 			}
 			multipartForm, err := mr.ReadForm(DefaultMemory)
 			if err != nil {
-				return err
+				return InvalidArgument.Wrap(err)
 			}
 			multipartFormSetter = (*MultipartSource)(multipartForm)
 		} else {
@@ -129,7 +129,7 @@ func CommonBind(s Source, v any) error {
 				return nil
 			}
 			if err := DefaultUnmarshal(ctx, contentType, data, v); err != nil {
-				return err
+				return InvalidArgument.Wrap(err)
 			}
 			if recorder, ok := body.(httpx.RecordBodyer); ok {
 				recorder.RecordBody(data, v)

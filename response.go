@@ -125,39 +125,38 @@ func (r *CommonProtoResp[T]) MarshalProto() ([]byte, error) {
 		buf = protowire.AppendVarint(buf, uint64(r.Code))
 	}
 
-	// 编码 Msg 字段 (field number 2, string)
+	// Encode Msg (field 2, string).
 	if r.Msg != "" {
 		buf = protowire.AppendVarint(buf, 0x12)
 		buf = protowire.AppendString(buf, r.Msg)
 	}
 
-	// 编码 Data 字段 (field number 3, bytes)
-	if r.Code == 0 {
-		buf = append(buf, 0)
-		var err error
-		buf, err = proto.MarshalOptions{}.MarshalAppend(buf, r.Data)
+	// Encode Data (field 3, length-delimited bytes) with standard protowire
+	// tag 0x1a, whether or not Code is zero. The old encoder only wrote Data
+	// when Code==0 and used a bare sentinel byte 0, so UnmarshalProto silently
+	// dropped Data whenever Code!=0 or Msg!="".
+	if !reflect.ValueOf(r.Data).IsNil() {
+		data, err := proto.Marshal(r.Data)
 		if err != nil {
 			return nil, err
 		}
+		buf = protowire.AppendVarint(buf, 0x1a)
+		buf = protowire.AppendVarint(buf, uint64(len(data)))
+		buf = append(buf, data...)
 	}
 
 	return buf, nil
 }
 
-// UnmarshalProto 手动解码 protobuf 数据到 CommonProtoResp
+// UnmarshalProto decodes protobuf bytes into CommonProtoResp.
+// Wire layout: field 1=Code (varint), 2=Msg (bytes), 3=Data (bytes).
 func (r *CommonProtoResp[T]) UnmarshalProto(data []byte) error {
-	var pos int
-	if data[0] == 0 {
-		if reflect.ValueOf(r.Data).IsNil() {
-			r.Data = r.Data.ProtoReflect().New().Interface().(T)
-		}
-		if len(data[pos:]) > 0 {
-			return proto.Unmarshal(data[1:], r.Data)
-		}
+	if len(data) == 0 {
 		return nil
 	}
+	var pos int
 	for pos < len(data) {
-		// 解析标签 (tag 和 wire type)
+		// Parse tag (field number + wire type).
 		tag, n := protowire.ConsumeVarint(data[pos:])
 		if n < 0 {
 			return errors.New("invalid protobuf data: unable to consume varint")
@@ -166,7 +165,7 @@ func (r *CommonProtoResp[T]) UnmarshalProto(data []byte) error {
 
 		fieldNum, wireType := protowire.DecodeTag(tag)
 		switch fieldNum {
-		case 1: // Code 字段
+		case 1: // Code
 			if wireType != protowire.VarintType {
 				return errors.New("invalid wire type for Code field")
 			}
@@ -177,7 +176,7 @@ func (r *CommonProtoResp[T]) UnmarshalProto(data []byte) error {
 			r.Code = ErrCode(code)
 			pos += n
 
-		case 2: // Msg 字段
+		case 2: // Msg
 			if wireType != protowire.BytesType {
 				return errors.New("invalid wire type for Msg field")
 			}
@@ -186,6 +185,29 @@ func (r *CommonProtoResp[T]) UnmarshalProto(data []byte) error {
 				return errors.New("invalid protobuf data: unable to consume Msg string")
 			}
 			r.Msg = msg
+			pos += n
+
+		case 3: // Data (length-delimited proto message)
+			if wireType != protowire.BytesType {
+				return errors.New("invalid wire type for Data field")
+			}
+			msg, n := protowire.ConsumeBytes(data[pos:])
+			if n < 0 {
+				return errors.New("invalid protobuf data: unable to consume Data bytes")
+			}
+			if reflect.ValueOf(r.Data).IsNil() {
+				r.Data = r.Data.ProtoReflect().New().Interface().(T)
+			}
+			if err := proto.Unmarshal(msg, r.Data); err != nil {
+				return err
+			}
+			pos += n
+
+		default: // Skip unknown fields so unknown tags cannot loop forever.
+			n := protowire.ConsumeFieldValue(fieldNum, wireType, data[pos:])
+			if n < 0 {
+				return errors.New("invalid protobuf data: unable to skip unknown field")
+			}
 			pos += n
 		}
 	}
@@ -204,10 +226,16 @@ func NewCommonAnyResp(code ErrCode, msg string, data any) *CommonAnyResp {
 }
 
 func ServeError(w http.ResponseWriter, r *http.Request, err error) {
+	if err == nil {
+		err = Internal
+	}
 	ErrRespFrom(err).ServeHTTP(w, r)
 }
 
 func RespondError(ctx context.Context, w http.ResponseWriter, err error) (int, error) {
+	if err == nil {
+		err = Internal
+	}
 	return ErrRespFrom(err).Respond(ctx, w)
 }
 
@@ -281,7 +309,11 @@ func (res *Response) Respond(ctx context.Context, w http.ResponseWriter) (int, e
 	} else {
 		httpx.CopyHttpHeader(w.Header(), res.Headers)
 	}
-	w.WriteHeader(res.Status)
+	statusCode := res.Status
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	w.WriteHeader(statusCode)
 	n, err := res.Body.WriteTo(w)
 	res.Body.Close()
 	return int(n), err
@@ -425,7 +457,11 @@ func (res *ResponseStream) Respond(ctx context.Context, w http.ResponseWriter) (
 	} else {
 		httpx.CopyHttpHeader(w.Header(), res.Headers)
 	}
-	w.WriteHeader(res.Status)
+	statusCode := res.Status
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	w.WriteHeader(statusCode)
 	return RespondStream(ctx, w, res.Body)
 }
 
