@@ -27,7 +27,7 @@ type RequestSource struct {
 	*gin.Context
 }
 
-func (s RequestSource) Uri() kvstruct.Getter {
+func (s RequestSource) Path() kvstruct.Getter {
 	return s.Params
 }
 
@@ -46,11 +46,11 @@ func (s RequestSource) Body() (context.Context, string, io.ReadCloser) {
 	return s, s.Request.Header.Get(httpx.HeaderContentType), s.Request.Body
 }
 
-type uriSource gin.Params
+type pathSource gin.Params
 
-var _ kvstruct.Setter = uriSource(nil)
+var _ kvstruct.Setter = pathSource(nil)
 
-func (param uriSource) Get(key string) ([]string, bool) {
+func (param pathSource) Get(key string) ([]string, bool) {
 	for i := range param {
 		if param[i].Key == key {
 			return []string{param[i].Value}, true
@@ -60,6 +60,6 @@ func (param uriSource) Get(key string) ([]string, bool) {
 }
 
 // TrySet tries to set a value by request's form source (like map[string][]string)
-func (param uriSource) TrySet(value reflect.Value, field *reflect.StructField, key string, opt *kvstruct.Options) (isSet bool, err error) {
+func (param pathSource) TrySet(value reflect.Value, field *reflect.StructField, key string, opt *kvstruct.Options) (isSet bool, err error) {
 	return kvstruct.SetValueByValuesGetter(value, field, param, key, opt)
 }

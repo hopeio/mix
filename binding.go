@@ -34,7 +34,7 @@ var (
 )
 
 type Source interface {
-	Uri() kvstruct.Getter
+	Path() kvstruct.Getter
 	Query() kvstruct.ValuesGetter
 	Header() kvstruct.ValuesGetter
 	Body() (context.Context, string, io.ReadCloser)
@@ -139,8 +139,8 @@ func CommonBind(s Source, v any) error {
 
 	}
 
-	uriSetter, querySetter, headerSetter := kvstruct.GetFunc(s.Uri().Get), kvstruct.ValuesGetFunc(s.Query().Get), kvstruct.ValuesGetFunc(header.Get)
-	commonSetter := kvstruct.Setters([]kvstruct.Setter{uriSetter, querySetter, headerSetter, multipartFormSetter})
+	pathSetter, querySetter, headerSetter := kvstruct.GetFunc(s.Path().Get), kvstruct.ValuesGetFunc(s.Query().Get), kvstruct.ValuesGetFunc(header.Get)
+	commonSetter := kvstruct.Setters([]kvstruct.Setter{pathSetter, querySetter, headerSetter, multipartFormSetter})
 	var err error
 	if fields, ok := cache.Load(typ); ok {
 		var isSet bool
@@ -149,7 +149,7 @@ func CommonBind(s Source, v any) error {
 			for _, tag := range field.Tags {
 				switch tag.Key {
 				case "uri", "path":
-					setter = uriSetter
+					setter = pathSetter
 				case "query":
 					setter = querySetter
 				case "header":
@@ -195,7 +195,7 @@ func CommonBind(s Source, v any) error {
 			if tagValue != "" && tagValue != "-" {
 				switch tag {
 				case "uri", "path":
-					setter = uriSetter
+					setter = pathSetter
 				case "query":
 					setter = querySetter
 				case "form":
@@ -265,8 +265,8 @@ type RequestSource struct {
 	*http.Request
 }
 
-func (s RequestSource) Uri() kvstruct.Getter {
-	return (*UriSource)(s.Request)
+func (s RequestSource) Path() kvstruct.Getter {
+	return (*PathSource)(s.Request)
 }
 
 func (s RequestSource) Query() kvstruct.ValuesGetter {
@@ -298,11 +298,11 @@ func (hs HeaderSource) Get(key string) ([]string, bool) {
 	return v, ok
 }
 
-type UriSource http.Request
+type PathSource http.Request
 
-var _ kvstruct.Getter = (*UriSource)(nil)
+var _ kvstruct.Getter = (*PathSource)(nil)
 
-func (req *UriSource) Get(key string) (string, bool) {
+func (req *PathSource) Get(key string) (string, bool) {
 	if req.Pattern == "" {
 		return "", false
 	}
@@ -312,7 +312,7 @@ func (req *UriSource) Get(key string) (string, bool) {
 
 type QuerySource map[string][]string
 
-var _ kvstruct.Getter = (*UriSource)(nil)
+var _ kvstruct.Getter = (*PathSource)(nil)
 
 func (req QuerySource) Get(key string) ([]string, bool) {
 	v, ok := req[key]

@@ -28,8 +28,8 @@ type RequestSource struct {
 	fiber.Ctx
 }
 
-func (s RequestSource) Uri() kvstruct.Getter {
-	return uriSource{s.Ctx}
+func (s RequestSource) Path() kvstruct.Getter {
+	return pathSource{s.Ctx}
 }
 
 func (s RequestSource) Query() kvstruct.ValuesGetter {
@@ -86,11 +86,11 @@ func (form *HeaderSource) Get(key string) ([]string, bool) {
 	return values, len(values) > 0
 }
 
-type uriSource struct {
+type pathSource struct {
 	fiber.Ctx
 }
 
-func (s uriSource) Get(key string) (string, bool) {
+func (s pathSource) Get(key string) (string, bool) {
 	v := s.Params(key)
 	return v, v != ""
 }
