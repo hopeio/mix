@@ -16,7 +16,6 @@ import (
 	"github.com/hopeio/gox/crypto/tls"
 	"github.com/hopeio/gox/log"
 	httpx "github.com/hopeio/gox/net/http"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/rs/cors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -76,7 +75,7 @@ type DebugConfig struct {
 }
 
 type OpenapiConfig struct {
-	Enabled        bool
+	Enabled         bool
 	PathPrefix, Dir string
 }
 
@@ -216,12 +215,6 @@ func (c *OtelConfig) SetOtelhttpOptions(otelhttpOpts []otelhttp.Option) {
 
 func (c *OtelConfig) SetOtelgrpcOptions(otelgrpcOpts []otelgrpc.Option) {
 	c.OtelgrpcOpts = otelgrpcOpts
-}
-
-type PrometheusConfig struct {
-	Enabled bool
-	HttpURI string
-	promhttp.HandlerOpts
 }
 
 func (s *Server) Init() {

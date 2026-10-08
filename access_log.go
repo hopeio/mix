@@ -29,7 +29,8 @@ type Body struct {
 }
 
 type AccessLogParam struct {
-	Method, Url string
+	// Method is the HTTP method; URI is the request-target (path + query).
+	Method, URI string
 	*httpx.Recorder
 	Metadata *Metadata
 }
@@ -77,7 +78,7 @@ func DefaultAccessLog(ctx context.Context, param *AccessLogParam) {
 
 	if ce := log.NoCallerLogger().Logger.Check(zap.InfoLevel, "access"); ce != nil {
 		ce.Write(zap.Inline(zap.DictObject(param.Metadata.AccessLogFields...)),
-			zap.String("url", param.Url),
+			zap.String("uri", param.URI),
 			zap.String("method", param.Method),
 			reqBodyField,
 			log.Context(ctx),
@@ -107,7 +108,7 @@ func DefaultGrpcAccessLog(ctx context.Context, param *GrpcAccessLogParam) {
 
 	if ce := log.NoCallerLogger().Logger.Check(zap.InfoLevel, "access"); ce != nil {
 		ce.Write(zap.Inline(zap.DictObject(param.Metadata.AccessLogFields...)),
-			zap.String("url", param.Method),
+			zap.String("uri", param.Method),
 			zap.String("method", "grpc"),
 			zap.String("body", safeStringer(param.Request)),
 			log.Context(ctx),

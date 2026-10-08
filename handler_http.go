@@ -29,7 +29,6 @@ const (
 	HeaderErrorMessage = "Error-Message"
 )
 
-
 // InternalHandler 往内部端口的私有 mux 上注册健康检查、OpenAPI 文档与调试端点
 func (s *Server) InternalHandler(mux *http.ServeMux) {
 	// k8s / 负载均衡标准探针端点
@@ -65,8 +64,8 @@ func (s *Server) httpHandler() http.Handler {
 		}()
 		// 不记录日志
 		if len(s.AccessLog.ExcludePrefixes) > 0 {
-			if stringsx.HasPrefixes(r.RequestURI, s.AccessLog.ExcludePrefixes) &&
-				!stringsx.HasPrefixes(r.RequestURI, s.AccessLog.IncludePrefixes) {
+			if stringsx.HasPrefixes(r.URL.Path, s.AccessLog.ExcludePrefixes) &&
+				!stringsx.HasPrefixes(r.URL.Path, s.AccessLog.IncludePrefixes) {
 				s.HttpHandler.ServeHTTP(w, r)
 				return
 			}
