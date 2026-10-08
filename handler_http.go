@@ -40,10 +40,10 @@ func (s *Server) InternalHandler(mux *http.ServeMux) {
 	mux.Handle("/healthz", healthz)
 	mux.Handle("/readyz", healthz)
 	if s.Openapi.Enabled {
-		openapi.Openapi(mux, s.Openapi.UriPrefix, s.Openapi.Dir)
+		openapi.Openapi(mux, s.Openapi.PathPrefix, s.Openapi.Dir)
 	}
 	if s.Debug.Enabled {
-		httpx.HandleDebug(mux, s.Debug.UriPrefix)
+		httpx.HandleDebug(mux, s.Debug.PathPrefix)
 	}
 }
 

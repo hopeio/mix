@@ -71,13 +71,13 @@ type Server struct {
 }
 
 type DebugConfig struct {
-	Enabled   bool
-	UriPrefix string
+	Enabled    bool
+	PathPrefix string
 }
 
 type OpenapiConfig struct {
 	Enabled        bool
-	UriPrefix, Dir string
+	PathPrefix, Dir string
 }
 
 type GrpcConfig struct {
