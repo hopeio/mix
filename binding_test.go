@@ -10,7 +10,7 @@ import (
 )
 
 type User struct {
-	ID    int    `uri:"id"`
+	ID    int    `path:"id"`
 	Name  string `json:"name"`
 	Age   int    `header:"age"`
 	Phone string `query:"phone"`
@@ -72,7 +72,7 @@ func TestBind2(t *testing.T) {
 
 func TestBindFormContentType_StillBindsURIQueryHeader(t *testing.T) {
 	type FormUser struct {
-		ID    int    `uri:"id"`
+		ID    int    `path:"id"`
 		Name  string `form:"name"`
 		Age   int    `header:"age"`
 		Phone string `query:"phone"`

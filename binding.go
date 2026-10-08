@@ -30,7 +30,7 @@ var (
 	DefaultMemory int64 = 32 << 20
 	Validate            = ValidateStruct
 	commonTag           = "json"
-	defaultTags         = []string{"uri", "path", "query", "header", "form", commonTag}
+	defaultTags         = []string{"path", "query", "header", "form", commonTag}
 )
 
 type Source interface {
@@ -148,7 +148,7 @@ func CommonBind(s Source, v any) error {
 			var setter kvstruct.Setter
 			for _, tag := range field.Tags {
 				switch tag.Key {
-				case "uri", "path":
+				case "path":
 					setter = pathSetter
 				case "query":
 					setter = querySetter
@@ -194,7 +194,7 @@ func CommonBind(s Source, v any) error {
 			tagValue = sf.Tag.Get(tag)
 			if tagValue != "" && tagValue != "-" {
 				switch tag {
-				case "uri", "path":
+				case "path":
 					setter = pathSetter
 				case "query":
 					setter = querySetter
