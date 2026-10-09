@@ -20,6 +20,19 @@ const (
 	RequestTypeGrpc
 )
 
+// Metadata is the per-request snapshot carried through the context, spanning
+// the HTTP and gRPC serving paths.
+//
+// Concurrency contract: fields are written once during request assembly
+// (inside mix handlers, before the request is served) and are read-only
+// afterwards. Data/DataM are the exception — they carry values across
+// goroutines during a request and MUST go through the lock-protected
+// Set/Get/SetData/GetData/DataAs methods. AccessLogFields is read by the
+// access logger when the request completes; append to it before the handler
+// returns. Exported fields are deliberate: like http.Request, this is a data
+// record, not an invariant-bearing type, and getters over reference-typed
+// fields (Request, IncomingMD, slices, maps) would provide no real
+// encapsulation while forcing defensive copies on hot paths.
 type Metadata struct {
 	sync.RWMutex
 	Logger                *log.Logger
@@ -36,31 +49,7 @@ type Metadata struct {
 	IncomingMD            metadata.MD
 	ServerTransportStream grpc.ServerTransportStream
 	AccessLogFields       []zap.Field
-	Baggage               baggage.Baggage // can not edit
-}
-
-func (m *Metadata) Set(key, value any) {
-	m.Lock()
-	defer m.Unlock()
-	if m.DataM == nil {
-		m.DataM = make(map[any]any)
-	}
-	m.DataM[key] = value
-}
-
-func (m *Metadata) SetData(value any) {
-	m.Lock()
-	defer m.Unlock()
-	m.Data = value
-}
-
-func (m *Metadata) Del(key any) {
-	m.Lock()
-	defer m.Unlock()
-	if m.DataM == nil {
-		return
-	}
-	delete(m.DataM, key)
+	Baggage               baggage.Baggage
 }
 
 func (m *Metadata) Get(key any) any {
@@ -72,10 +61,34 @@ func (m *Metadata) Get(key any) any {
 	return m.DataM[key]
 }
 
+func (m *Metadata) Set(key, value any) {
+	m.Lock()
+	defer m.Unlock()
+	if m.DataM == nil {
+		m.DataM = make(map[any]any)
+	}
+	m.DataM[key] = value
+}
+
+func (m *Metadata) Del(key any) {
+	m.Lock()
+	defer m.Unlock()
+	if m.DataM == nil {
+		return
+	}
+	delete(m.DataM, key)
+}
+
 func (m *Metadata) GetData() any {
 	m.RLock()
 	defer m.RUnlock()
 	return m.Data
+}
+
+func (m *Metadata) SetData(value any) {
+	m.Lock()
+	defer m.Unlock()
+	m.Data = value
 }
 
 func (m *Metadata) DataAs[T any]() (T, bool) {
