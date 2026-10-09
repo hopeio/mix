@@ -2,7 +2,9 @@ package mix
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,4 +117,76 @@ func GetMetadata(ctx context.Context) *Metadata {
 		return nil
 	}
 	return metadata
+}
+
+// ClientIP returns the client's real IP. Proxy headers win over the
+// connection address; only the first entry is taken so a forged
+// X-Forwarded-For chain is not passed through wholesale.
+func (m *Metadata) ClientIP() string {
+	if m == nil {
+		return ""
+	}
+	if m.Request != nil {
+		// Plain HTTP serving path: headers are canonical, address is
+		// RemoteAddr.
+		if v := firstIP(m.Request.Header.Values("X-Forwarded-For")); v != "" {
+			return v
+		}
+		if v := firstIP(m.Request.Header.Values("X-Real-Ip")); v != "" {
+			return v
+		}
+		return hostOnly(m.Request.RemoteAddr)
+	}
+	if len(m.IncomingMD) != 0 {
+		if v := firstIP(m.IncomingMD.Get("x-forwarded-for")); v != "" {
+			return v
+		}
+		if v := firstIP(m.IncomingMD.Get("x-real-ip")); v != "" {
+			return v
+		}
+	}
+	return hostOnly(m.PeerAddr)
+}
+
+// ClientUA returns the client User-Agent on either serving path.
+func (m *Metadata) ClientUA() string {
+	if m == nil {
+		return ""
+	}
+	if m.Request != nil {
+		return strings.TrimSpace(m.Request.UserAgent())
+	}
+	if len(m.IncomingMD) != 0 {
+		return firstNonEmpty(m.IncomingMD.Get("user-agent"))
+	}
+	return ""
+}
+
+func firstIP(values []string) string {
+	for _, s := range values {
+		s = strings.TrimSpace(s)
+		if i := strings.IndexByte(s, ','); i > 0 {
+			s = strings.TrimSpace(s[:i])
+		}
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values []string) string {
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func hostOnly(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
 }
