@@ -78,6 +78,13 @@ func (m *Metadata) GetData() any {
 	return m.Data
 }
 
+func (m *Metadata) DataAs[T any]() (T, bool) {
+    m.RLock()
+    defer m.RUnlock()
+    v, ok := m.Data.(T)
+    return v, ok
+}
+
 type metadataKey struct{}
 
 var MetadataKey = metadataKey{}
