@@ -4,8 +4,9 @@
  * @Created by jyb
  */
 
-// Client request context extraction: IP and User-Agent from incoming
-// gRPC metadata (grpc-gateway forwards HTTP headers into metadata keys).
+// Client request context extraction: IP and User-Agent, covering both
+// serving paths — gRPC (grpc-gateway forwards HTTP headers into metadata
+// keys) and plain net/http handlers (via Metadata.Request).
 package mix
 
 import (
@@ -17,45 +18,64 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-// ClientIP returns the client's real IP: prefers the reverse-proxy headers
-// injected by grpc-gateway, falls back to the gRPC peer TCP address. Only the
-// first IP is taken so a forged chain is not passed through wholesale.
-//
-// Shared by callers that need traceability: content publishing, admin audit.
+// ClientIP returns the client's real IP. Proxy headers win over the
+// connection address; only the first entry is taken so a forged
+// X-Forwarded-For chain is not passed through wholesale.
 func ClientIP(ctx context.Context) string {
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		// grpc-gateway lowercases HTTP headers into metadata keys.
-		if v := firstIP(md.Get("x-forwarded-for")); v != "" {
-			return v
+	if md := GetMetadata(ctx); md != nil {
+		if md.Request != nil {
+			// Plain HTTP serving path: headers are canonical, address is
+			// RemoteAddr.
+			if v := firstIP(md.Request.Header.Values("X-Forwarded-For")); v != "" {
+				return v
+			}
+			if v := firstIP(md.Request.Header.Values("X-Real-Ip")); v != "" {
+				return v
+			}
+			return hostOnly(md.Request.RemoteAddr)
 		}
-		if v := firstIP(md.Get("x-real-ip")); v != "" {
-			return v
+		if len(md.IncomingMD) != 0 {
+			if v := firstIP(md.IncomingMD.Get("x-forwarded-for")); v != "" {
+				return v
+			}
+			if v := firstIP(md.IncomingMD.Get("x-real-ip")); v != "" {
+				return v
+			}
 		}
-	}
-	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
-		if host, _, err := net.SplitHostPort(p.Addr.String()); err == nil {
-			return host
-		}
-		return p.Addr.String()
-	}
-	return ""
-}
-
-// ClientUA returns the client User-Agent (injected by grpc-gateway).
-func ClientUA(ctx context.Context) string {
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		for _, v := range md.Get("user-agent") {
-			v = strings.TrimSpace(v)
-			if v != "" {
+	} else {
+		// No request snapshot in the context: fall back to raw gRPC state.
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if v := firstIP(md.Get("x-forwarded-for")); v != "" {
+				return v
+			}
+			if v := firstIP(md.Get("x-real-ip")); v != "" {
 				return v
 			}
 		}
 	}
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		return hostOnly(p.Addr.String())
+	}
 	return ""
 }
 
-func firstIP(v []string) string {
-	for _, s := range v {
+// ClientUA returns the client User-Agent on either serving path.
+func ClientUA(ctx context.Context) string {
+	if md := GetMetadata(ctx); md != nil {
+		if md.Request != nil {
+			return strings.TrimSpace(md.Request.UserAgent())
+		}
+		if len(md.IncomingMD) != 0 {
+			return firstNonEmpty(md.IncomingMD.Get("user-agent"))
+		}
+	} else if md, ok := metadata.FromIncomingContext(ctx); ok {
+		return firstNonEmpty(md.Get("user-agent"))
+	}
+	return ""
+}
+
+func firstIP(values []string) string {
+	for _, s := range values {
 		s = strings.TrimSpace(s)
 		if i := strings.IndexByte(s, ','); i > 0 {
 			s = strings.TrimSpace(s[:i])
@@ -65,4 +85,20 @@ func firstIP(v []string) string {
 		}
 	}
 	return ""
+}
+
+func firstNonEmpty(values []string) string {
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func hostOnly(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
 }
