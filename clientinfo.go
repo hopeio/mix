@@ -13,65 +13,59 @@ import (
 	"context"
 	"net"
 	"strings"
-
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 )
 
 // ClientIP returns the client's real IP. Proxy headers win over the
 // connection address; only the first entry is taken so a forged
 // X-Forwarded-For chain is not passed through wholesale.
-func ClientIP(ctx context.Context) string {
-	if md := GetMetadata(ctx); md != nil {
-		if md.Request != nil {
-			// Plain HTTP serving path: headers are canonical, address is
-			// RemoteAddr.
-			if v := firstIP(md.Request.Header.Values("X-Forwarded-For")); v != "" {
-				return v
-			}
-			if v := firstIP(md.Request.Header.Values("X-Real-Ip")); v != "" {
-				return v
-			}
-			return hostOnly(md.Request.RemoteAddr)
+func (m *Metadata) ClientIP() string {
+	if m == nil {
+		return ""
+	}
+	if m.Request != nil {
+		// Plain HTTP serving path: headers are canonical, address is
+		// RemoteAddr.
+		if v := firstIP(m.Request.Header.Values("X-Forwarded-For")); v != "" {
+			return v
 		}
-		if len(md.IncomingMD) != 0 {
-			if v := firstIP(md.IncomingMD.Get("x-forwarded-for")); v != "" {
-				return v
-			}
-			if v := firstIP(md.IncomingMD.Get("x-real-ip")); v != "" {
-				return v
-			}
+		if v := firstIP(m.Request.Header.Values("X-Real-Ip")); v != "" {
+			return v
 		}
-	} else {
-		// No request snapshot in the context: fall back to raw gRPC state.
-		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			if v := firstIP(md.Get("x-forwarded-for")); v != "" {
-				return v
-			}
-			if v := firstIP(md.Get("x-real-ip")); v != "" {
-				return v
-			}
+		return hostOnly(m.Request.RemoteAddr)
+	}
+	if len(m.IncomingMD) != 0 {
+		if v := firstIP(m.IncomingMD.Get("x-forwarded-for")); v != "" {
+			return v
+		}
+		if v := firstIP(m.IncomingMD.Get("x-real-ip")); v != "" {
+			return v
 		}
 	}
-	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
-		return hostOnly(p.Addr.String())
+	return hostOnly(m.PeerAddr)
+}
+
+// ClientUA returns the client User-Agent on either serving path.
+func (m *Metadata) ClientUA() string {
+	if m == nil {
+		return ""
+	}
+	if m.Request != nil {
+		return strings.TrimSpace(m.Request.UserAgent())
+	}
+	if len(m.IncomingMD) != 0 {
+		return firstNonEmpty(m.IncomingMD.Get("user-agent"))
 	}
 	return ""
 }
 
-// ClientUA returns the client User-Agent on either serving path.
+// ClientIP is a context convenience wrapper around Metadata.ClientIP.
+func ClientIP(ctx context.Context) string {
+	return GetMetadata(ctx).ClientIP()
+}
+
+// ClientUA is a context convenience wrapper around Metadata.ClientUA.
 func ClientUA(ctx context.Context) string {
-	if md := GetMetadata(ctx); md != nil {
-		if md.Request != nil {
-			return strings.TrimSpace(md.Request.UserAgent())
-		}
-		if len(md.IncomingMD) != 0 {
-			return firstNonEmpty(md.IncomingMD.Get("user-agent"))
-		}
-	} else if md, ok := metadata.FromIncomingContext(ctx); ok {
-		return firstNonEmpty(md.Get("user-agent"))
-	}
-	return ""
+	return GetMetadata(ctx).ClientUA()
 }
 
 func firstIP(values []string) string {

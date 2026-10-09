@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
@@ -114,6 +115,9 @@ func (s *Server) UnaryAccess(ctx context.Context, req interface{}, info *grpc.Un
 	if !ok {
 		md.IncomingMD = nil
 	}
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		md.PeerAddr = p.Addr.String()
+	}
 	if err = ValidateStruct(req); err != nil {
 		return nil, err
 	}
@@ -203,6 +207,9 @@ func (s *Server) StreamAccess(srv interface{}, stream grpc.ServerStream, info *g
 	md.IncomingMD, ok = metadata.FromIncomingContext(ctx)
 	if !ok {
 		md.IncomingMD = nil
+	}
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		md.PeerAddr = p.Addr.String()
 	}
 	wrapper := &recvWrapper{
 		ServerStream: stream,

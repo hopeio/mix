@@ -48,8 +48,11 @@ type Metadata struct {
 	RequestAt             time.Time
 	IncomingMD            metadata.MD
 	ServerTransportStream grpc.ServerTransportStream
-	AccessLogFields       []zap.Field
-	Baggage               baggage.Baggage
+	// PeerAddr is the remote connection address captured during gRPC
+	// request assembly; fallback when no proxy headers are present.
+	PeerAddr        string
+	AccessLogFields []zap.Field
+	Baggage         baggage.Baggage
 }
 
 func (m *Metadata) Get(key any) any {
@@ -92,10 +95,10 @@ func (m *Metadata) SetData(value any) {
 }
 
 func (m *Metadata) DataAs[T any]() (T, bool) {
-    m.RLock()
-    defer m.RUnlock()
-    v, ok := m.Data.(T)
-    return v, ok
+	m.RLock()
+	defer m.RUnlock()
+	v, ok := m.Data.(T)
+	return v, ok
 }
 
 type metadataKey struct{}
