@@ -63,9 +63,9 @@ type CommonBinder interface {
 	Bind(r Source, v any) error
 }
 
-func BindTag(tag string)  {
-	 commonTag = tag
-	 defaultTags[len(defaultTags)-1] = commonTag
+func BindTag(tag string) {
+	commonTag = tag
+	defaultTags[len(defaultTags)-1] = commonTag
 }
 
 func Bind(r *http.Request, v any) error {
@@ -126,15 +126,18 @@ func CommonBind(s Source, v any) error {
 				}
 			}
 			if len(data) == 0 {
+				// DELETE / PUT 常只带路径参数、没有 body：这里不能直接 return，
+				// 否则下面的 path/query/header 绑定全被跳过，接口拿不到 id。
+				// （历史 bug：取消点赞、重命名/删除收藏夹都因此静默失效。）
+			} else {
+				if err := DefaultUnmarshal(ctx, contentType, data, v); err != nil {
+					return InvalidArgument.Wrap(err)
+				}
+				if recorder, ok := body.(httpx.RecordBodyer); ok {
+					recorder.RecordBody(data, v)
+				}
 				return nil
 			}
-			if err := DefaultUnmarshal(ctx, contentType, data, v); err != nil {
-				return InvalidArgument.Wrap(err)
-			}
-			if recorder, ok := body.(httpx.RecordBodyer); ok {
-				recorder.RecordBody(data, v)
-			}
-			return nil
 		}
 
 	}

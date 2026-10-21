@@ -133,3 +133,18 @@ func TestHeaderSource_GetDirectly(t *testing.T) {
 	require.Len(t, vals, 1)
 	assert.Equal(t, "foo bar", vals[0])
 }
+
+// DELETE / PUT 只带路径参数、没有 body 时，空 body 不能短路掉 path/query 绑定：
+// 之前这里 return，导致取消点赞、重命名/删除收藏夹都拿不到 id。
+func TestBindDeleteWithoutBodyBindsPath(t *testing.T) {
+	req, err := http.NewRequest(http.MethodDelete, "http://localhost/api/content/container/7", nil)
+	require.NoError(t, err)
+	req.Pattern = "/api/content/container/{id}"
+	req.SetPathValue("id", "7")
+
+	var v struct {
+		Id uint64 `json:"id"`
+	}
+	require.NoError(t, Bind(req, &v))
+	assert.Equal(t, uint64(7), v.Id)
+}
