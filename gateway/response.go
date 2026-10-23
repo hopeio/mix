@@ -26,12 +26,12 @@ var HandleResponseMessage = func(w http.ResponseWriter, r *http.Request, message
 	case mix.ResponseBody:
 		buf, contentType = rb.ResponseBody()
 	case mix.XXXResponseBody:
-		buf, contentType, err = mix.DefaultMarshal(r.Context(), rb.XXX_ResponseBody())
+		buf, contentType, err = marshalForRequest(r, rb.XXX_ResponseBody())
 		if err != nil {
 			return err
 		}
 	default:
-		buf, contentType, err = mix.DefaultMarshal(r.Context(), message)
+		buf, contentType, err = marshalForRequest(r, message)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ var HandleError = func(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	s := ErrRespFromError(err)
 	delete(r.Header, httpx.HeaderTrailer)
-	buf, contentType, _ := mix.DefaultMarshal(r.Context(), s)
+	buf, contentType, _ := marshalForRequest(r, s)
 	header := w.Header()
 	header.Set(httpx.HeaderContentType, contentType)
 	mix.WriteErrHeaders(header, s.Code)

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	jsonx "github.com/hopeio/gox/encoding/json"
@@ -15,45 +16,7 @@ import (
 )
 
 func init() {
-	mix.DefaultMarshal = func(ctx context.Context, v any) (data []byte, contentType string, err error) {
-		switch msg := v.(type) {
-		case *wrapperspb.StringValue:
-			v = msg.Value
-		case *wrapperspb.BoolValue:
-			v = msg.Value
-		case *wrapperspb.Int32Value:
-			v = msg.Value
-		case *wrapperspb.Int64Value:
-			v = msg.Value
-		case *wrapperspb.UInt32Value:
-			v = msg.Value
-		case *wrapperspb.UInt64Value:
-			v = msg.Value
-		case *wrapperspb.FloatValue:
-			v = msg.Value
-		case *wrapperspb.DoubleValue:
-			v = msg.Value
-		case *wrapperspb.BytesValue:
-			v = msg.Value
-		case *mix.CommonAnyResp, *mix.ErrResp:
-			data, err := jsonx.Marshal(msg)
-			if err != nil {
-				return data, httpx.ContentTypeText, err
-			}
-			return data, httpx.ContentTypeJson, nil
-		case error:
-			data, err := jsonx.Marshal(mix.ErrRespFrom(msg))
-			if err != nil {
-				return data, httpx.ContentTypeText, err
-			}
-			return data, httpx.ContentTypeJson, nil
-		}
-		data, err = jsonx.Marshal(&mix.CommonAnyResp{Data: v})
-		if err != nil {
-			return data, httpx.ContentTypeText, err
-		}
-		return data, httpx.ContentTypeJson, nil
-	}
+	mix.DefaultMarshal = marshalPreferPB
 
 	mix.DefaultUnmarshal = func(ctx context.Context, contentType string, data []byte, v any) error {
 		if strings.HasSuffix(contentType, "protobuf") {
@@ -75,6 +38,40 @@ func init() {
 		}
 		return nil
 	}
+}
+
+// wantsJSON：只有 Accept 明确点名 JSON、且没有声明 protobuf 时才走 JSON。
+// 空 / `*/*` 走 pb —— gRPC-gateway 的契约是 protobuf 优先，浏览器端想拿 JSON 自己声明。
+func wantsJSON(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	accept := strings.ToLower(r.Header.Get("Accept"))
+	if strings.Contains(accept, "protobuf") {
+		return false
+	}
+	return strings.Contains(accept, "application/json") || strings.Contains(accept, "text/json")
+}
+
+// marshalPreferPB 是 mix.DefaultMarshal 的实现：从元数据拿本次请求做协商；
+// 没有请求上下文（后台任务、流式起始）按 pb 处理。
+func marshalPreferPB(ctx context.Context, v any) ([]byte, string, error) {
+	if md := mix.GetMetadata(ctx); md != nil && wantsJSON(md.Request) {
+		return JsonMarshal(ctx, v)
+	}
+	return ProtobufMarshal(ctx, v)
+}
+
+// marshalForRequest 供网关写出使用：直接按本次请求协商，不依赖元数据是否已注入。
+func marshalForRequest(r *http.Request, v any) ([]byte, string, error) {
+	ctx := context.Background()
+	if r != nil {
+		ctx = r.Context()
+	}
+	if wantsJSON(r) {
+		return JsonMarshal(ctx, v)
+	}
+	return ProtobufMarshal(ctx, v)
 }
 
 func unmarshalInner(inner []byte, v any) error {
